@@ -53,3 +53,7 @@ The migration and service lines came from consecutive runs. The first run comple
 ## Scope of deployment
 
 Neon provisions backend services. It does not publish this React application on Vercel or this Flask application on Render. The owner will supply the platform-specific values and deploy those applications. No GitHub-hosted CI run or public Render/Vercel URL has been verified from this workspace.
+
+## Intended application branch migration
+
+After validation, the same committed migration chain was applied to the initially empty `production` database. Output: `Database migration completed.` Synthetic test accounts were seeded only in the isolated validation branch, not in the intended application branch.
