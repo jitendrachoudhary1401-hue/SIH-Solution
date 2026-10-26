@@ -520,9 +520,10 @@ def verify_otp_endpoint():
     response = make_response({"user": user_json(user), "csrf": csrf})
     response.set_cookie(
         "onecase_session", token,
+        path="/",
         httponly=True,
         secure=current_app.config["COOKIE_SECURE"],
-        samesite="Strict",
+        samesite="Lax",
         max_age=28800
     )
     return response
@@ -616,7 +617,14 @@ def refresh():
     db.session.add(Session(id=digest(token), user_id=g.user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
     db.session.commit()
     response = make_response({"user": user_json(g.user), "csrf": csrf})
-    response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
+    response.set_cookie(
+        "onecase_session", token,
+        path="/",
+        httponly=True,
+        secure=current_app.config["COOKIE_SECURE"],
+        samesite="Lax",
+        max_age=28800
+    )
     return response
 
 
@@ -627,7 +635,7 @@ def logout():
     db.session.delete(g.session)
     db.session.commit()
     response = make_response({"ok": True})
-    response.delete_cookie("onecase_session")
+    response.delete_cookie("onecase_session", path="/")
     return response
 
 

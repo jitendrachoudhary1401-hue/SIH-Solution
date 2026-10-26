@@ -41,7 +41,7 @@ export default function App() {
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 5000); return () => clearTimeout(timer); } }, [message]);
   const logout = async () => { await post('/auth/logout', {}); setCsrf(''); client.clear(); window.location.assign('/officer/login'); };
   if (identity.isPending) return <Loading />;
-  if (!identity.data) return <Login expired={expired} onSuccess={data => { setCsrf(data.csrf); client.clear(); client.setQueryData(['identity'], data); }} />;
+  if (!identity.data) return <Login expired={expired} onSuccess={data => { setCsrf(data.csrf); client.setQueryData(['identity'], data); }} />;
   return <Auth.Provider value={{ user: identity.data.user, logout }}><Toast.Provider value={setMessage}><Routes><Route element={<Shell />}><Route path="/dashboard" element={<Dashboard />} /><Route path="/complaints" element={<Complaints />} /><Route path="/complaints/:id" element={<CaseDetail />} /><Route path="/institutions" element={<Institutions />} /><Route path="/institutions/:id" element={<InstitutionDetail />} /><Route path="/overlaps" element={<Overlaps />} /><Route path="/overlaps/:id" element={<OverlapDetail />} /><Route path="/alerts" element={<Alerts />} /><Route path="/audit-logs" element={<Audit />} /><Route path="/reports" element={<Reports />} /><Route path="/account-requests" element={<AccountRequestsManager />} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Route></Routes>{message && <div className="toast" role="status"><CheckCheck size={18} />{message}<button aria-label="Dismiss notification" className="icon-button" onClick={() => setMessage('')}><X size={16} /></button></div>}</Toast.Provider></Auth.Provider>;
 }
 
