@@ -12,7 +12,8 @@ from flask import Blueprint, abort, current_app, g, jsonify, make_response, requ
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import and_, func, or_, select
 from werkzeug.utils import secure_filename
-from .auth import authenticated, case_or_404, check_version, digest, scope
+from .auth import (authenticated, case_or_404, check_version, digest, scope, roles, capabilities,
+                   allowed, has_content, document_allowed, proceeding_allowed, require_admin)
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
                      Pair, Review, Idempotency, MatchingRun, SLAPause)
@@ -40,6 +41,15 @@ class Registration(Input):
     deadline_reason: str = Field(default="", max_length=1000)
     deadline_rule: str = "none"
     next_action: str = Field(min_length=3, max_length=500)
+    issue_summary: str = Field(default="", max_length=300)
+    complainant_type: str = "student"
+    affected_person: str = Field(default="", max_length=150)
+    submitter_name: str = Field(default="", max_length=150)
+    representation_basis: str = Field(default="", max_length=1000)
+    source_channel: str = Field(default="Officer recording", max_length=60)
+    source_reference: str = Field(default="", max_length=150)
+    prior_proceedings: str = Field(default="", max_length=5000)
+    sensitivity: str = "standard"
 
     @field_validator("received_at", "due_at")
     @classmethod
@@ -56,6 +66,9 @@ class Change(Input):
 
 class StatusChange(Change):
     status: str
+    outcome_document_id: int | None = None
+    communication: str = Field(default="", max_length=2000)
+    external_continues: bool = False
 
 
 class TransferChange(Change):
@@ -93,7 +106,8 @@ def body():
 
 def user_json(user):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
-            "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Explicit scope"}
+            "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Assigned scope",
+            "roles": sorted(roles(user)), "capabilities": capabilities(user)}
 
 
 def institution_json(inst):
@@ -121,11 +135,25 @@ def case_json(case, detail=False):
               "deadline_config": case.deadline_config, "paused_at": iso(case.paused_at),
               "next_action": case.next_action, "version": case.version, "content_revision": case.content_revision,
               "matching_state": case.matching_state, "matching_error": case.matching_error}
+    result.update(issue_summary=case.issue_summary, complainant_type=case.complainant_type,
+                  source_channel=case.source_channel, source_reference=case.source_reference, entered_at=iso(case.entered_at))
     if detail:
-        result["description"] = case.description
-        result["allowed_transitions"] = TRANSITIONS[case.status]
-        result["can_edit"] = g.user.role == "lead" and case.bureau_id == g.user.bureau_id or g.user.role == "officer" and case.owner_id == g.user.id
-        result["can_transfer"] = g.user.role == "lead" and case.bureau_id == g.user.bureau_id
+        content = has_content(case)
+        result["description"] = case.description if content else "Full complaint content is outside your appointment's field scope. Use the assigned proceeding records below."
+        result["can_transition"] = allowed(case, "case.transition")
+        result["allowed_transitions"] = TRANSITIONS[case.status] if result["can_transition"] else []
+        result["can_edit"] = allowed(case, "case.edit")
+        result["can_transfer"] = allowed(case, "case.transfer")
+        result["can_route"] = allowed(case, "case.route")
+        result["can_proceeding"] = allowed(case, "case.proceeding")
+        result["can_compliance"] = allowed(case, "case.compliance")
+        result["can_export"] = allowed(case, "case.export")
+        result["can_read_documents"] = allowed(case, "documents.read")
+        result["has_content"] = content
+        if content:
+            result.update(affected_person=case.affected_person, submitter_name=case.submitter_name,
+                          representation_basis=case.representation_basis, prior_proceedings=case.prior_proceedings,
+                          sensitivity=case.sensitivity, taxonomy_version=case.taxonomy_version)
     return result
 
 
@@ -159,8 +187,8 @@ def notify(user_id, case, kind, message, key):
         db.session.add(Notification(user_id=user_id, complaint_id=case.id, kind=kind, message=message, dedup_key=key))
 
 
-def filtered_cases(receipt_dates=True):
-    query = select(Complaint).join(Institution).where(scope())
+def filtered_cases(receipt_dates=True, aggregate=False):
+    query = select(Complaint).join(Institution).where(scope(aggregate=aggregate))
     filters = request.args
     if filters.get("q"):
         term = "%" + filters["q"][:120] + "%"
@@ -298,9 +326,15 @@ def complaints():
 @api.post("/complaints")
 @authenticated
 def register_case():
-    if g.user.role not in ("officer", "lead"):
+    if not roles() & {"officer", "lead"}:
         abort(403, description="Only officers may register complaints.")
     data = parse(Registration)
+    if data.complainant_type not in ("student", "faculty", "staff", "other") or data.sensitivity not in ("standard", "restricted"):
+        abort(422, description="Choose a valid complainant type and sensitivity.")
+    if data.affected_person and data.submitter_name and data.affected_person != data.submitter_name and len(data.representation_basis) < 5:
+        abort(422, description="Record the representative's authorization basis.")
+    if data.source_channel in ("Import", "Portal reference") and not data.source_reference:
+        abort(422, description="Imported/source-system complaints require their original reference.")
     if data.category not in CATEGORIES or data.priority not in ("low", "normal", "high", "urgent"):
         abort(422, description="Choose a valid category and priority.")
     if data.received_at > now() + timedelta(minutes=1):
@@ -315,7 +349,7 @@ def register_case():
     owner = db.session.get(User, data.owner_id)
     if not institution or not owner or not owner.active or owner.bureau_id != g.user.bureau_id or owner.role not in ("officer", "lead"):
         abort(422, description="Select an institution and an active accountable officer in your bureau.")
-    if g.user.role == "officer" and owner.id != g.user.id:
+    if "lead" not in roles() and owner.id != g.user.id:
         abort(403, description="Only a bureau lead may assign another officer.")
     key = request.headers.get("Idempotency-Key", "")
     if not 8 <= len(key) <= 100:
@@ -331,6 +365,8 @@ def register_case():
                      bureau_id=owner.bureau_id, owner_id=owner.id, received_at=data.received_at,
                      due_at=data.due_at, deadline_policy="Authorized explicit deadline v1" if data.due_at else "Deadline not set",
                      next_action=data.next_action)
+    for field in ("issue_summary", "complainant_type", "affected_person", "submitter_name", "representation_basis", "source_channel", "source_reference", "prior_proceedings", "sensitivity"):
+        setattr(case, field, getattr(data, field))
     db.session.add(case)
     if data.deadline_rule != "none":
         from .sla import calculate
@@ -344,7 +380,8 @@ def register_case():
     db.session.flush()
     db.session.add(Assignment(complaint_id=case.id, bureau_id=case.bureau_id, owner_id=case.owner_id, reason="Initial registration"))
     db.session.add(Idempotency(user_id=g.user.id, key=key, digest=payload_digest, complaint_id=case.id))
-    event(case, "registered", "Complaint registered", data.deadline_reason)
+    event(case, "registered", "Complaint registered and intake acknowledged", data.deadline_reason,
+          {"acknowledgement": {"reference": case.reference, "source_receipt_at": iso(case.received_at), "entry_at": iso(case.entered_at)}, "source_channel": case.source_channel})
     enqueue(case)
     db.session.commit()
     return case_json(case, True), 201
@@ -355,7 +392,7 @@ def register_case():
 def detail(case_id):
     case = case_or_404(case_id)
     result = case_json(case, True)
-    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id))]
+    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
     result["transfers"] = [{"id": t.id, "to_owner_id": t.to_owner_id, "created_at": iso(t.created_at), "acknowledged_at": iso(t.acknowledged_at)} for t in db.session.scalars(select(Transfer).where(Transfer.complaint_id == case.id).order_by(Transfer.id.desc()))]
     result["pauses"] = [{"id": p.id, "started_at": iso(p.started_at), "ended_at": iso(p.ended_at), "reason": p.reason} for p in db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id).order_by(SLAPause.id))]
     return result
@@ -437,15 +474,20 @@ def sla_clock(case_id, operation):
 @api.post("/complaints/<int:case_id>/status")
 @authenticated
 def change_status(case_id):
-    case = case_or_404(case_id, write=True)
+    case = case_or_404(case_id, operation="case.transition")
     data = parse(StatusChange)
     check_version(case, data.version)
     if data.status not in TRANSITIONS[case.status]:
         abort(422, description="This status transition is not permitted.")
+    if data.status == "disposed":
+        from .workflow import validate_disposition
+        validate_disposition(case, data)
     previous = case.status
     case.status = data.status
     event(case, "reopened" if previous == "disposed" else "status_changed", f"Status changed to {case.status.replace('_', ' ')}",
-          data.reason, {"status": {"before": previous, "after": case.status}, "deadline_at": iso(case.due_at), "deadline_policy": case.deadline_policy, "paused_at": iso(case.paused_at)})
+          data.reason, {"status": {"before": previous, "after": case.status}, "deadline_at": iso(case.due_at), "deadline_policy": case.deadline_policy, "paused_at": iso(case.paused_at),
+                        "outcome_document_id": data.outcome_document_id, "communication": data.communication,
+                        "external_proceedings_continue": data.external_continues, "verifier_id": g.user.id})
     db.session.commit()
     return case_json(case, True)
 
@@ -532,7 +574,15 @@ def retry_matching(case_id):
 @api.post("/complaints/<int:case_id>/attachments")
 @authenticated
 def upload(case_id):
-    case = case_or_404(case_id, write=True)
+    case = case_or_404(case_id)
+    proceeding_id = request.form.get("proceeding_id", type=int)
+    if proceeding_id:
+        from .models import Proceeding
+        proceeding = db.session.get(Proceeding, proceeding_id)
+        if not proceeding or proceeding.complaint_id != case.id or not (proceeding_allowed(proceeding, "coordinate") or proceeding_allowed(proceeding, "contribute")):
+            abort(403, description="A current proceeding appointment with evidence access is required.")
+    elif not allowed(case, "case.edit"):
+        abort(403, description="Proceeding participants must attach files to their assigned proceeding.")
     try:
         check_version(case, int(request.form.get("version", "0")))
     except ValueError:
@@ -552,7 +602,10 @@ def upload(case_id):
     path = Path(current_app.config["STORAGE_PATH"]) / key
     path.write_bytes(content)
     try:
-        db.session.add(Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest()))
+        sensitivity = request.form.get("sensitivity", "standard")
+        if sensitivity not in ("standard", "restricted"):
+            abort(422, description="Invalid evidence sensitivity.")
+        db.session.add(Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity))
         event(case, "evidence_added", f"Evidence added: {name}")
         case.version += 1
         db.session.commit()
@@ -568,7 +621,9 @@ def download(attachment_id):
     attachment = db.session.get(Attachment, attachment_id)
     if not attachment:
         abort(404)
-    case_or_404(attachment.complaint_id)
+    case = case_or_404(attachment.complaint_id)
+    if not document_allowed(case, attachment):
+        abort(404, description="Document unavailable in your field scope.")
     path = Path(current_app.config["STORAGE_PATH"]) / attachment.key
     if not path.is_file():
         abort(404, description="Evidence file unavailable.")
@@ -576,7 +631,7 @@ def download(attachment_id):
 
 
 def authorized_pairs():
-    ids = select(Complaint.id).where(scope())
+    ids = [c.id for c in db.session.scalars(select(Complaint).where(scope())) if has_content(c)]
     return select(Pair).where(Pair.case_a_id.in_(ids), Pair.case_b_id.in_(ids))
 
 
@@ -585,7 +640,7 @@ def pair_json(pair, detailed=False):
               "state": pair.state, "band": pair.band, "evidence": pair.evidence, "version": pair.version}
     result["stale"] = pair.evidence.get("revisions") != {str(pair.a.id): pair.a.content_revision, str(pair.b.id): pair.b.content_revision}
     if detailed:
-        result["can_review"] = g.user.role == "reviewer"
+        result["can_review"] = "reviewer" in roles()
         result["reviews"] = [{"id": x.id, "reviewer": x.user.name, "decision": x.decision, "reason": x.reason, "created_at": iso(x.created_at)} for x in db.session.scalars(select(Review).where(Review.pair_id == pair.id).order_by(Review.id.desc()))]
     return result
 
@@ -613,7 +668,7 @@ def overlap_detail(pair_id):
 @api.post("/overlaps/<int:pair_id>/review")
 @authenticated
 def review(pair_id):
-    if g.user.role != "reviewer":
+    if "reviewer" not in roles():
         abort(403, description="A designated reviewer must record the decision.")
     pair = db.session.scalar(authorized_pairs().where(Pair.id == pair_id))
     if not pair:
@@ -705,17 +760,22 @@ def dashboard():
 @api.get("/reports/complaints.csv")
 @authenticated
 def export():
+    permitted = [c for c in db.session.scalars(filtered_cases().order_by(Complaint.id)) if allowed(c, "case.export")]
+    if not permitted and db.session.scalar(filtered_cases().limit(1)):
+        abort(403, description="A separate export grant is required for these records.")
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Reference", "Institution", "Category", "Status", "Bureau", "Owner", "Received UTC", "Due UTC", "Deadline condition"])
     def safe(value):
         value = str(value or "")
         return "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
-    for case in db.session.scalars(filtered_cases().order_by(Complaint.id)):
+    for case in permitted:
         writer.writerow([safe(v) for v in [case.reference, case.institution.name, case.category, case.status, case.bureau.code, case.owner.name, iso(case.received_at), iso(case.due_at), condition(case)]])
     response = make_response(output.getvalue())
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="onecase-complaints.csv"'
+    event(None, "exported", "Scoped complaint register exported", changes={"record_count": len(permitted)})
+    db.session.commit()
     return response
 
 
@@ -745,8 +805,7 @@ def report_metrics():
 @api.get("/operations")
 @authenticated
 def operations():
-    if g.user.role != "admin":
-        abort(403, description="Administrator access required.")
+    require_admin()
     counts = {state: db.session.scalar(select(func.count()).select_from(Job).where(Job.state == state)) for state in ("queued", "running", "failed", "completed", "superseded")}
     oldest = db.session.scalar(select(func.min(Job.available_at)).where(Job.state == "queued"))
     return {"jobs": counts, "oldest_queued_at": iso(oldest), "asOf": iso(now())}
