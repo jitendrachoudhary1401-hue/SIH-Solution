@@ -10,7 +10,7 @@ from app.cli import seed_demo
 
 @pytest.fixture
 def app(tmp_path):
-    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents")})
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents"), "STORAGE_BACKEND": "local", "RATELIMIT_ENABLED": False})
     with app.app_context():
         db.create_all()
         seed_demo("TestPassword!2026")

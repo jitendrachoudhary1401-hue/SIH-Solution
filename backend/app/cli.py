@@ -2,7 +2,7 @@ import os
 from datetime import timedelta
 import click
 from sqlalchemy import select
-from .models import db, now, Bureau, User, Institution, Complaint, Assignment, Grant
+from .models import db, now, Bureau, User, Institution, Complaint, Assignment, Grant, PermissionGrant
 
 
 def seed_demo(password):
@@ -54,10 +54,42 @@ def seed_demo(password):
         for reader in users[4:6]:
             db.session.add(Grant(user_id=reader.id, complaint_id=case.id))
         enqueue(case)
+    configure_demo_access(password)
     db.session.commit()
 
 
+def configure_demo_access(password="OneCaseDemo!2026"):
+    """Explicit synthetic access grants; never silently applied to non-demo accounts."""
+    from .api import hasher
+    for name, email, role in [("Isha Verma", "verifier@onecase.demo", "verifier"), ("Anil Desai", "committee@onecase.demo", "committee"), ("Sana Khan", "monitor@onecase.demo", "executive")]:
+        if not db.session.scalar(select(User).where(User.email == email)):
+            db.session.add(User(name=name, email=email, role=role, password_hash=hasher.hash(password)))
+    db.session.flush()
+    for email in ("lead.rb@onecase.demo", "lead.pgrc@onecase.demo"):
+        user = db.session.scalar(select(User).where(User.email == email))
+        if not user:
+            continue
+        for operation in ("case.transition", "case.export", "audit.read"):
+            if not db.session.scalar(select(PermissionGrant.id).where(PermissionGrant.user_id == user.id, PermissionGrant.operation == operation, PermissionGrant.bureau_id == user.bureau_id)):
+                db.session.add(PermissionGrant(user_id=user.id, operation=operation, bureau_id=user.bureau_id,
+                                               approval_reference="SYNTHETIC-DEMO-ACCESS-V2", reason="Explicit demonstration permission", expires_at=now() + timedelta(days=30)))
+    verifier = db.session.scalar(select(User).where(User.email == "verifier@onecase.demo"))
+    from .models import ActionEvent
+    synthetic_ids = select(ActionEvent.complaint_id).where(ActionEvent.kind == "registered", ActionEvent.reason == "Synthetic demonstration record")
+    for case in db.session.scalars(select(Complaint).where(Complaint.id.in_(synthetic_ids))):
+        if not db.session.scalar(select(Grant.id).where(Grant.user_id == verifier.id, Grant.complaint_id == case.id)):
+            db.session.add(Grant(user_id=verifier.id, complaint_id=case.id, expires_at=now() + timedelta(days=30), reason="Synthetic independent-verifier assignment"))
+        for operation in ("documents.read", "case.transition"):
+            if not db.session.scalar(select(PermissionGrant.id).where(PermissionGrant.user_id == verifier.id, PermissionGrant.complaint_id == case.id, PermissionGrant.operation == operation)):
+                db.session.add(PermissionGrant(user_id=verifier.id, complaint_id=case.id, operation=operation, approval_reference="SYNTHETIC-VERIFIER-V2", reason="Independent demonstration verification", expires_at=now() + timedelta(days=30)))
+
+
 def register(app):
+    @app.cli.command("configure-demo-access")
+    def demo_access():
+        configure_demo_access()
+        db.session.commit()
+        click.echo("Explicit synthetic access grants configured; existing cases preserved.")
     @app.cli.command("seed-demo")
     @click.option("--password", envvar="DEMO_PASSWORD", default="OneCaseDemo!2026", help="Synthetic local demo password")
     def seed(password):
