@@ -17,5 +17,5 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 .agents
-
+files
 .codex
