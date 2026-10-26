@@ -47,6 +47,7 @@ npm run build
 .venv/Scripts/python.exe -m pip install -r backend/requirements-test.txt
 .venv/Scripts/python.exe -m pytest backend/tests -q
 Set-Location frontend
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path (Resolve-Path '..').Path '.runtime/playwright'
 npx playwright install chromium
 npm run test:e2e
 ```

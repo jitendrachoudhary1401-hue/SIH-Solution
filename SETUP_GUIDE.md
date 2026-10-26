@@ -14,7 +14,7 @@ Start with [frontend setup](frontend/README.md), [backend setup](backend/README.
 
 Set Vercel Root Directory to **`frontend`**: install `npm ci`, build `npm run build`, output `dist`. Its proxy and deployment config are inside that folder.
 
-Set Render Root Directory to **`backend`**: build `pip install -r requirements.txt`, pre-deploy `python migrate.py`, start `python serve.py`, health path `/api/health`. For Blueprint import, choose `backend/render.yaml` as the Blueprint file path. The backend needs no frontend build or repository-root files.
+Set Render Root Directory to **`backend`**: build `pip install -r requirements.txt`, pre-deploy `python migrate.py`, start `python serve.py`, health path `/api/health`. For Blueprint import, choose `backend/render.yaml` as the Blueprint file path. If the plan has no pre-deploy hook, run migrations manually before releasing the new API. The backend needs no frontend build or repository-root files.
 
 No AWS account or AWS service is added. Private files remain on Neon object storage. The Neon CLI emits S3-compatible names; when entering Render settings, map these private values:
 

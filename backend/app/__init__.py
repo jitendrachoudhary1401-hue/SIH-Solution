@@ -56,10 +56,10 @@ def create_app(config=None):
         STORAGE_BACKEND=os.getenv("STORAGE_BACKEND", "neon" if os.getenv("NEON_STORAGE_ENDPOINT") or os.getenv("AWS_ENDPOINT_URL_S3") else "local"),
         STORAGE_BUCKET=os.getenv("STORAGE_BUCKET", "assets"),
         # Legacy names are emitted by the Neon CLI, not a separate AWS service.
-        AWS_ENDPOINT_URL_S3=os.getenv("NEON_STORAGE_ENDPOINT", os.getenv("AWS_ENDPOINT_URL_S3", "")),
-        AWS_REGION=os.getenv("NEON_STORAGE_REGION", os.getenv("AWS_REGION", "")),
-        AWS_ACCESS_KEY_ID=os.getenv("NEON_STORAGE_ACCESS_KEY_ID", os.getenv("AWS_ACCESS_KEY_ID", "")),
-        AWS_SECRET_ACCESS_KEY=os.getenv("NEON_STORAGE_SECRET_ACCESS_KEY", os.getenv("AWS_SECRET_ACCESS_KEY", "")),
+        AWS_ENDPOINT_URL_S3=os.getenv("NEON_STORAGE_ENDPOINT") or os.getenv("AWS_ENDPOINT_URL_S3", ""),
+        AWS_REGION=os.getenv("NEON_STORAGE_REGION") or os.getenv("AWS_REGION", ""),
+        AWS_ACCESS_KEY_ID=os.getenv("NEON_STORAGE_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY_ID", ""),
+        AWS_SECRET_ACCESS_KEY=os.getenv("NEON_STORAGE_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_ACCESS_KEY", ""),
         FRONTEND_PROXY_SECRET=os.getenv("FRONTEND_PROXY_SECRET", ""),
     )
     app.config.update(config or {})

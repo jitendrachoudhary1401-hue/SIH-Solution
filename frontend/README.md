@@ -50,6 +50,7 @@ Keep individual uploads within the backend's deployed limit (default 3 MiB) and 
 ```powershell
 npm run build
 npm run test:proxy
+$env:PLAYWRIGHT_BROWSERS_PATH = Join-Path (Resolve-Path '..').Path '.runtime/playwright'
 npx playwright install chromium
 npm run test:e2e
 ```
