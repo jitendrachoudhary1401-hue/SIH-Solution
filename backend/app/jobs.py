@@ -48,8 +48,8 @@ def tick(models=None):
         job, case = db.session.get(Job, job_id), db.session.get(Complaint, case_id)
         # Store a safe operational error, never exception strings containing complaint text.
         message = "Matching failed. Check local model installation and worker logs; retry is available."
-        if isinstance(error, (ImportError, FileNotFoundError)):
-            message = "Local matching dependencies or model artifacts are missing. Complete model setup and retry."
+        if isinstance(error, (ImportError, FileNotFoundError, RuntimeError)):
+            message = "Required hybrid matching model artifacts or dependencies are unavailable. Complete local model installation via 'python backend/download_models.py' and retry."
         job.error, job.lease_until = message, None
         job.state = "failed" if job.attempts >= 3 else "queued"
         job.available_at = now() + timedelta(seconds=30 * 2 ** job.attempts)

@@ -4,7 +4,7 @@ from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm.exc import StaleDataError
 from werkzeug.exceptions import HTTPException
 from .models import db
@@ -18,13 +18,17 @@ def sqlite_foreign_keys(connection, record):
 
 def create_app(config=None):
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     root = Path(__file__).resolve().parents[2]
+    load_dotenv(root / ".env")
     runtime = root / ".runtime"
     runtime.mkdir(exist_ok=True)
     app = Flask(__name__, static_folder=None)
+    
+    # Primary database is PostgreSQL per specification. Falls back to DATABASE_URL if configured.
+    default_db_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/onecase")
+    
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", "sqlite:///" + (runtime / "onecase.db").as_posix()),
+        SQLALCHEMY_DATABASE_URI=default_db_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         STORAGE_PATH=str(runtime / "documents"),
@@ -51,6 +55,14 @@ def create_app(config=None):
             if request.headers.get("Sec-Fetch-Site") == "cross-site":
                 abort(403, description="Cross-site write requests are not permitted.")
 
+    @app.errorhandler(OperationalError)
+    def db_operational_error(error):
+        db.session.rollback()
+        return jsonify(error={
+            "message": "Primary database (PostgreSQL) is unavailable. Please verify that PostgreSQL is running and accessible at DATABASE_URL.",
+            "status": 503
+        }), 503
+
     @app.errorhandler(HTTPException)
     def http_error(error):
         db.session.rollback()
@@ -75,8 +87,16 @@ def create_app(config=None):
     @app.get("/api/health")
     def health():
         from sqlalchemy import text
-        db.session.execute(text("SELECT 1"))
-        return {"status": "ok", "service": "onecase"}
+        try:
+            db.session.execute(text("SELECT 1"))
+            return {"status": "ok", "service": "onecase", "database": "connected"}
+        except Exception as err:
+            return jsonify({
+                "status": "degraded",
+                "service": "onecase",
+                "database": "unavailable",
+                "message": f"Primary database connection failed: {str(err)[:200]}"
+            }), 503
 
     @app.get("/", defaults={"path": ""})
     @app.get("/<path:path>")

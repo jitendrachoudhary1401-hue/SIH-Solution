@@ -49,7 +49,7 @@ function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: s
   const [show, setShow] = useState(false); const navigate = useNavigate();
   const mutation = useMutation({ mutationFn: (data: { email: string; password: string }) => post<{ user: User; csrf: string }>('/auth/login', data), onSuccess: data => { onSuccess(data); navigate('/dashboard'); } });
   function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = new FormData(e.currentTarget); mutation.mutate({ email: String(form.get('email')), password: String(form.get('password')) }); }
-  return <div className="login"><div className="dot-field" aria-hidden="true" /><div className="login-brand-wrapper"><img src="/logo.png" alt="OneCase — AICTE Intelligent Institution Complaint Coordination & Tracking System" className="login-logo-img" /></div><main className="login-card"><div className="login-icon"><ShieldCheck size={26} /></div><p className="eyebrow">OFFICER WORKSPACE</p><h1>Officer sign in</h1><p>Access your authorized bureau workspace and case records.</p>{(expired || location.search.includes('expired')) && <div className="notice">Your session expired. Sign in to continue.</div>}<form onSubmit={submit}><Field title="Email address"><input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required /></Field><Field title="Password"><div className="password-input"><input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required /><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field><FormError mutation={mutation} /><button className="button primary full" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in…' : 'Sign in to workspace'}<ArrowRight size={17} /></button></form><div className="login-foot"><ShieldCheck size={15} /> Access for provisioned officers only</div></main><p className="login-bottom">AICTE Intelligent Institution Complaint Coordination & Tracking System</p><p className="demo-login">Local demonstration · synthetic records<br />Demo lead: <code>lead.rb@onecase.demo</code> · <code>OneCaseDemo!2026</code></p></div>;
+  return <div className="login"><div className="dot-field" aria-hidden="true" /><div className="login-brand-wrapper"><img src="/logo.png" alt="OneCase — AICTE Intelligent Institution Complaint Coordination & Tracking System" className="login-logo-img" /></div><main className="login-card"><div className="login-icon"><ShieldCheck size={26} /></div><p className="eyebrow">OFFICER WORKSPACE</p><h1>Officer sign in</h1><p>Access your authorized bureau workspace and case records.</p>{(expired || location.search.includes('expired')) && <div className="notice">Your session expired. Sign in to continue.</div>}<form onSubmit={submit}><Field title="Email address"><input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required /></Field><Field title="Password"><div className="password-input"><input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required /><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field><FormError mutation={mutation} /><button className="button primary full" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in…' : 'Sign in to workspace'}<ArrowRight size={17} /></button></form><div className="login-foot"><ShieldCheck size={15} /> Access for provisioned bureau officers only</div></main><p className="login-bottom">AICTE Intelligent Institution Complaint Coordination & Tracking System</p><div className="login-status-notice"><ShieldCheck size={15} /><span>Authorized Officer Portal · Accounts must be provisioned through administrative workflow</span></div></div>;
 }
 
 const nav = [{ path: '/dashboard', label: 'Overview', icon: LayoutDashboard }, { path: '/complaints', label: 'Complaints', icon: FolderOpen }, { path: '/institutions', label: 'Institutions', icon: Building2 }, { path: '/overlaps', label: 'Overlap review', icon: Link2 }, { path: '/alerts', label: 'Alerts', icon: Bell }, { path: '/audit-logs', label: 'Action logs', icon: Activity }, { path: '/reports', label: 'Reports', icon: FileCheck2 }];
@@ -60,7 +60,7 @@ function Shell() {
   const navigate = useNavigate(); const location = useLocation();
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('onecase-theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { setMobile(false); window.scrollTo(0, 0); }, [location.pathname]);
-  const sidebar = <><Link to="/dashboard" className="brand"><img src="/logo.png" alt="OneCase Logo" className="sidebar-logo-img" /><div className="brand-title"><span className="brand-one">One</span><span className="brand-case">Case</span><span className="brand-badge">AICTE</span></div></Link><div className="workspace"><span className="workspace-icon"><Building2 size={19} /></span><div><strong>{user.bureau} workspace</strong><small>Complaint coordination</small></div><ChevronDown size={14} /></div><p className="nav-label">WORKSPACE</p><nav>{nav.map(item => <NavLink to={item.path} key={item.path} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}><item.icon size={19} />{item.label}{item.path === '/overlaps' && <span className="nav-dot" />}</NavLink>)}</nav><div className="sidebar-bottom"><div className="demo-note"><ShieldCheck size={18} /><strong>Demonstration workspace</strong><p>Synthetic records. Illustrative policies. Every action is recorded.</p></div><div className="profile"><span className="avatar">{user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><strong>{user.name}</strong><small>{label(user.role)} · {user.bureau}</small></div><button aria-label="Sign out" className="icon-button" onClick={() => Promise.resolve(logout()).catch(e => setLogoutError(e))}><LogOut size={17} /></button></div></div></>;
+  const sidebar = <><Link to="/dashboard" className="brand"><img src="/logo.png" alt="OneCase Logo" className="sidebar-logo-img" /><div className="brand-title"><span className="brand-one">One</span><span className="brand-case">Case</span><span className="brand-badge">AICTE</span></div></Link><div className="workspace"><span className="workspace-icon"><Building2 size={19} /></span><div><strong>{user.bureau} workspace</strong><small>Complaint coordination</small></div><ChevronDown size={14} /></div><p className="nav-label">WORKSPACE</p><nav>{nav.map(item => <NavLink to={item.path} key={item.path} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}><item.icon size={19} />{item.label}{item.path === '/overlaps' && <span className="nav-dot" />}</NavLink>)}</nav><div className="sidebar-bottom"><div className="demo-note"><ShieldCheck size={18} /><strong>Authorized Workspace</strong><p>Real database persistence · Immutable action audit trail</p></div><div className="profile"><span className="avatar">{user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><strong>{user.name}</strong><small>{label(user.role)} · {user.bureau}</small></div><button aria-label="Sign out" className="icon-button" onClick={() => Promise.resolve(logout()).catch(e => setLogoutError(e))}><LogOut size={17} /></button></div></div></>;
   return <div className="app-shell"><a href="#main" className="skip-link">Skip to content</a><aside className="sidebar">{sidebar}</aside><Dialog.Root open={mobile} onOpenChange={setMobile}><Dialog.Portal><Dialog.Overlay className="overlay" /><Dialog.Content className="mobile-sidebar"><Dialog.Title className="sr-only">Workspace navigation</Dialog.Title><Dialog.Description className="sr-only">Navigate the OneCase workspace.</Dialog.Description><Dialog.Close className="mobile-close icon-button" aria-label="Close navigation"><X /></Dialog.Close>{sidebar}</Dialog.Content></Dialog.Portal></Dialog.Root><div className="main-shell"><header className="topbar"><div className="breadcrumb"><button aria-label="Open navigation" className="icon-button mobile-menu" onClick={() => setMobile(true)}><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{nav.find(n => location.pathname.startsWith(n.path))?.label || 'Case details'}</strong></div><div className="topbar-actions"><form className="global-search" onSubmit={e => { e.preventDefault(); const value = new FormData(e.currentTarget).get('search'); navigate('/complaints?q=' + encodeURIComponent(String(value))); }}><Search size={16} /><input name="search" aria-label="Search cases or institutions" placeholder="Search cases or institutions…" /></form><button className="icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><Link to="/alerts" className="icon-button" aria-label="Open alerts"><Bell size={19} /></Link><span className="topbar-avatar">{user.name[0]}</span></div></header><main id="main" className="main-content"><ErrorBox error={logoutError} /><Outlet /></main><footer className="footer"><span>OneCase · Institution complaint coordination</span><span><span className="status-dot" /> Authorized workspace · Asia/Kolkata (IST)</span></footer></div></div>;
 }
 
@@ -76,7 +76,102 @@ function Dashboard() {
   const { user } = useContext(Auth); const [params] = useSearchParams();
   const query = useData<Summary>('/dashboard/summary?' + params); const data = query.data;
   const scope = params.toString(); const list = (extra: string) => '/complaints?' + [scope, extra].filter(Boolean).join('&');
-  return <><Heading eyebrow="YOUR WORKSPACE, AT A GLANCE" title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}`} description="A clear view of every case that needs your attention." action={<NewComplaint />} /><Filters /><ErrorBox error={query.error} retry={() => query.refetch()} />{query.isPending ? <Loading /> : data && <><div className="scope-caption"><span><span className="status-dot" />Current authorized receipt cohort</span><span>Updated {date(data.asOf, true)} IST</span></div><div className="stats">{[{ name: 'Total complaints', value: data.total, icon: FileText, href: list(''), caption: 'Within selected receipt cohort', tone: 'blue' }, { name: 'Active cases', value: data.active, icon: FolderOpen, href: list('active=true'), caption: 'Received, reviewing, or awaiting info', tone: 'emerald' }, { name: 'Overdue cases', value: data.overdue, icon: Clock3, href: list('overdue=true'), caption: 'Active cases past their due date', tone: 'orange' }, { name: 'Awaiting overlap review', value: data.pending_pairs, icon: Link2, href: '/overlaps?' + [scope, 'state=pending'].filter(Boolean).join('&'), caption: 'Possible pairs · human review required', tone: 'cyan' }].map(stat => <Link className="stat-card" key={stat.name} to={stat.href}><div><span>{stat.name}</span><span className={`stat-icon ${stat.tone}`}><stat.icon size={19} /></span></div><strong>{stat.value.toLocaleString('en-IN')}</strong><p>{stat.caption}<ArrowRight size={14} /></p></Link>)}</div><section className="card trend-card"><div className="card-heading"><div><h2>Complaints received and disposal events</h2><p>Eight weekly buckets · Monday boundaries · Asia/Kolkata</p></div><span className="subtle-tag">Event period</span></div><div className="chart-legend"><span><i className="received-key" /> Received</span><span><i className="disposed-key" /> Disposal events</span></div><div className="chart" aria-label="Weekly complaint trends"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={data.trend} margin={{ top: 10, right: 12, left: -25, bottom: 0 }}><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0062d2" stopOpacity={0.24} /><stop offset="100%" stopColor="#0062d2" stopOpacity={0.01} /></linearGradient></defs><CartesianGrid strokeDasharray="3 5" vertical={false} stroke="var(--border)" /><XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} dy={10} /><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} /><Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)' }} /><Area type="monotone" name="Disposal events" dataKey="disposed" stroke="#0062d2" strokeWidth={2.5} fill="url(#area)" isAnimationActive={false} /><Line type="monotone" name="Received" dataKey="received" stroke="#0284c7" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} /></ComposedChart></ResponsiveContainer></div><details className="chart-data"><summary>View accessible data table and scope</summary><p>Received counts follow the selected receipt filters. Disposal counts follow the same bureau, institution and category scope, using disposal event dates. A case disposed twice contributes two events.</p><table><thead><tr><th>Week beginning</th><th>Received</th><th>Disposal events</th></tr></thead><tbody>{data.trend.map(t => <tr key={t.week}><td>{t.week}</td><td>{t.received}</td><td>{t.disposed}</td></tr>)}</tbody></table></details></section><div className="dashboard-bottom"><section className="card"><div className="card-heading"><div><h2>Cases requiring attention</h2><p>Ordered by urgency, priority, and deadline</p></div><Link to={list('active=true')} className="text-button">View all <ArrowRight size={14} /></Link></div>{data.attention.length ? data.attention.map(c => <Link to={`/complaints/${c.id}`} className="attention-row" key={c.id}><span className={`case-icon ${c.deadline_condition}`}><FileText size={18} /></span><div className="grow"><div className="row-title"><strong>{c.reference}</strong><Badge value={c.deadline_condition} /></div><p>{c.institution.name}</p><small>{c.category} · {c.bureau} · {c.owner}</small><div className="next-action">{c.next_action}</div></div><ChevronRight size={15} /></Link>) : <Empty title="Your queue is clear" />}</section><section className="card"><div className="card-heading"><div><h2>Recent case actions</h2><p>Recorded activity in your selected scope</p></div><Link to="/audit-logs" className="text-button">View logs <ArrowRight size={14} /></Link></div><div className="activity-list">{data.recent.map(e => <div className="activity-row" key={e.id}><span className="activity-mark"><Check size={12} /></span><div><p><strong>{e.actor}</strong> · {e.summary}</p><Link to={`/complaints/${e.complaint_id}`}>{e.reference}</Link><small>{date(e.created_at, true)} IST</small></div></div>)}{!data.recent.length && <Empty title="No recent actions" />}</div><div className="card-callout"><ShieldCheck size={18} /><div><strong>Every action leaves a record</strong><p>Ownership, decisions, and case history stay connected.</p></div></div></section></div><div className="policy-note"><CircleHelp size={15} />{data.policy}</div></>}</>;
+  return (
+    <>
+      <Heading eyebrow="YOUR WORKSPACE, AT A GLANCE" title={`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, ${user.name.split(' ')[0]}`} description="A clear view of every case that needs your attention." action={<NewComplaint />} />
+      <Filters />
+      <ErrorBox error={query.error} retry={() => query.refetch()} />
+      {query.isPending ? <Loading /> : data && (
+        <>
+          <div className="scope-caption"><span><span className="status-dot" />Current authorized receipt cohort</span><span>Updated {date(data.asOf, true)} IST</span></div>
+          <div className="stats">
+            {[
+              { name: 'Total complaints', value: data.total, icon: FileText, href: list(''), caption: 'Within selected receipt cohort', tone: 'blue' },
+              { name: 'Active cases', value: data.active, icon: FolderOpen, href: list('active=true'), caption: 'Received, reviewing, or awaiting info', tone: 'emerald' },
+              { name: 'Overdue cases', value: data.overdue, icon: Clock3, href: list('overdue=true'), caption: 'Active cases past their due date', tone: 'orange' },
+              { name: 'Awaiting overlap review', value: data.pending_pairs, icon: Link2, href: '/overlaps?' + [scope, 'state=pending'].filter(Boolean).join('&'), caption: 'Possible pairs · human review required', tone: 'cyan' },
+            ].map(stat => (
+              <Link className="stat-card" key={stat.name} to={stat.href}>
+                <div><span>{stat.name}</span><span className={`stat-icon ${stat.tone}`}><stat.icon size={19} /></span></div>
+                <strong>{stat.value.toLocaleString('en-IN')}</strong>
+                <p>{stat.caption}<ArrowRight size={14} /></p>
+              </Link>
+            ))}
+          </div>
+          <section className="card trend-card">
+            <div className="card-heading">
+              <div>
+                <h2>Complaints received and disposal events</h2>
+                <p>Eight weekly buckets · Monday boundaries · Asia/Kolkata</p>
+              </div>
+              <span className="subtle-tag">Event period</span>
+            </div>
+            {data.total === 0 ? (
+              <div className="empty" style={{ padding: '48px 16px' }}>
+                <Clock3 size={32} />
+                <h3>No complaint activity recorded in database</h3>
+                <p>Weekly trend data will populate as actual complaints are received and disposed within your authorized bureau scope.</p>
+              </div>
+            ) : (
+              <>
+                <div className="chart-legend">
+                  <span><i className="received-key" /> Received</span>
+                  <span><i className="disposed-key" /> Disposal events</span>
+                </div>
+                <div className="chart" aria-label="Weekly complaint trends">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={data.trend} margin={{ top: 10, right: 12, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0062d2" stopOpacity={0.24} />
+                          <stop offset="100%" stopColor="#0062d2" stopOpacity={0.01} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 5" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} dy={10} />
+                      <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: 'var(--muted)', fontSize: 11 }} />
+                      <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)' }} />
+                      <Area type="monotone" name="Disposal events" dataKey="disposed" stroke="#0062d2" strokeWidth={2.5} fill="url(#area)" isAnimationActive={false} />
+                      <Line type="monotone" name="Received" dataKey="received" stroke="#0284c7" strokeWidth={2} strokeDasharray="5 5" dot={false} isAnimationActive={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <details className="chart-data">
+                  <summary>View accessible data table and scope</summary>
+                  <p>Received counts follow the selected receipt filters. Disposal counts follow the same bureau, institution and category scope, using disposal event dates. A case disposed twice contributes two events.</p>
+                  <table>
+                    <thead><tr><th>Week beginning</th><th>Received</th><th>Disposal events</th></tr></thead>
+                    <tbody>{data.trend.map(t => <tr key={t.week}><td>{t.week}</td><td>{t.received}</td><td>{t.disposed}</td></tr>)}</tbody>
+                  </table>
+                </details>
+              </>
+            )}
+          </section>
+          <div className="dashboard-bottom">
+            <section className="card">
+              <div className="card-heading">
+                <div><h2>Cases requiring attention</h2><p>Ordered by urgency, priority, and deadline</p></div>
+                <Link to={list('active=true')} className="text-button">View all <ArrowRight size={14} /></Link>
+              </div>
+              {data.attention.length ? data.attention.map(c => <Link to={`/complaints/${c.id}`} className="attention-row" key={c.id}><span className={`case-icon ${c.deadline_condition}`}><FileText size={18} /></span><div className="grow"><div className="row-title"><strong>{c.reference}</strong><Badge value={c.deadline_condition} /></div><p>{c.institution.name}</p><small>{c.category} · {c.bureau} · {c.owner}</small><div className="next-action">{c.next_action}</div></div><ChevronRight size={15} /></Link>) : <Empty title="Your queue is clear">No active complaints requiring attention in your authorized scope.</Empty>}
+            </section>
+            <section className="card">
+              <div className="card-heading">
+                <div><h2>Recent case actions</h2><p>Recorded activity in your selected scope</p></div>
+                <Link to="/audit-logs" className="text-button">View logs <ArrowRight size={14} /></Link>
+              </div>
+              <div className="activity-list">
+                {data.recent.map(e => <div className="activity-row" key={e.id}><span className="activity-mark"><Check size={12} /></span><div><p><strong>{e.actor}</strong> · {e.summary}</p><Link to={`/complaints/${e.complaint_id}`}>{e.reference}</Link><small>{date(e.created_at, true)} IST</small></div></div>)}
+                {!data.recent.length && <Empty title="No recent actions">Activity will be logged automatically as cases are processed.</Empty>}
+              </div>
+              <div className="card-callout"><ShieldCheck size={18} /><div><strong>Every action leaves an immutable record</strong><p>Ownership, decisions, and case history stay connected.</p></div></div>
+            </section>
+          </div>
+          <div className="policy-note"><CircleHelp size={15} />{data.policy}</div>
+        </>
+      )}
+    </>
+  );
 }
 
 function CaseTable({ items }: { items: Case[] }) {
@@ -139,9 +234,31 @@ function EventList({ items }: { items: Event[] }) {
   return <div className="event-list">{items.map(e => <div className="event" key={e.id}><div className="event-row"><button className="event-toggle" aria-expanded={expanded === e.id} aria-controls={`event-${e.id}`} onClick={() => setExpanded(expanded === e.id ? null : e.id)}><ChevronRight className={expanded === e.id ? 'rotated' : ''} size={16} /><div className="event-info"><strong>{e.summary}</strong><span>{e.actor} · {date(e.created_at, true)} IST</span></div><Badge value={e.outcome} /></button><Link className="event-case" to={`/complaints/${e.complaint_id}`}>{e.reference}</Link></div>{expanded === e.id && <div id={`event-${e.id}`} className="event-detail"><dl><div><dt>Event type</dt><dd>{label(e.kind)}</dd></div><div><dt>Reason / remarks</dt><dd>{e.reason || 'No additional remark recorded.'}</dd></div><div><dt>Original UTC timestamp</dt><dd>{e.created_at}</dd></div><div><dt>Severity</dt><dd>{label(e.severity)}</dd></div></dl>{Object.keys(e.changes).length > 0 && <pre>{JSON.stringify(e.changes, null, 2)}</pre>}</div>}</div>)}</div>;
 }
 
+function NewInstitution() {
+  const { user } = useContext(Auth); const [open, setOpen] = useState(false);
+  const client = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => post<Institution>('/institutions', data, 'POST'),
+    onSuccess: () => { setOpen(false); client.invalidateQueries(); }
+  });
+  if (!['officer', 'lead', 'admin'].includes(user.role)) return null;
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const values = Object.fromEntries(new FormData(e.currentTarget));
+    mutation.mutate({
+      name: String(values.name),
+      external_id: values.external_id ? String(values.external_id).trim() : null,
+      region: String(values.region),
+      address: String(values.address),
+      verified: values.verified === 'on'
+    });
+  }
+  return <Modal title="Register institution" description="Add an institution to the canonical directory with its official AICTE identifier." open={open} onOpenChange={setOpen} trigger={<button className="button primary"><Plus size={17} /> Add institution</button>}><form onSubmit={submit} className="form-grid"><Field title="Institution name"><input name="name" placeholder="Official institution name" minLength={3} maxLength={200} required /></Field><div className="form-row"><Field title="AICTE Permanent ID" hint="Official identifier (e.g. 1-123456789)"><input name="external_id" placeholder="Optional external identifier" maxLength={60} /></Field><Field title="Region"><select name="region" required defaultValue="North"><option value="North">North</option><option value="West">West</option><option value="South">South</option><option value="East">East</option><option value="Central">Central</option><option value="Northwest">Northwest</option><option value="Southwest">Southwest</option></select></Field></div><Field title="Campus address"><input name="address" placeholder="Campus location, City, State" minLength={5} maxLength={300} required /></Field>{['lead', 'admin'].includes(user.role) && <label className="checkbox-field"><input name="verified" type="checkbox" /> <span>Mark as officially verified AICTE identifier</span></label>}<FormError mutation={mutation} /><button className="button primary" disabled={mutation.isPending}>{mutation.isPending ? 'Registering…' : 'Register institution'}<ArrowRight size={16} /></button></form></Modal>;
+}
+
 function Institutions() {
   const [params, setParams] = useSearchParams(); const query = useData<Page<Institution>>('/institutions?' + params);
-  return <><Heading eyebrow="CANONICAL DIRECTORY" title="Institutions" description="Start with a verified identity. Explore the case history you are authorized to see." /><form className="filters" onSubmit={e => { e.preventDefault(); setParams({ q: String(new FormData(e.currentTarget).get('q')) }); }}><div className="search-input"><Search size={16} /><input name="q" aria-label="Search institutions" defaultValue={params.get('q') || ''} placeholder="Institution name or verified identifier…" /><button className="text-button">Search</button></div></form><ErrorBox error={query.error} retry={() => query.refetch()} />{query.isPending ? <Loading /> : <div className="institution-grid">{query.data?.items.map(i => <Link key={i.id} to={`/institutions/${i.id}`} className="card institution-card"><span className="institution-icon"><Building2 size={25} /></span><Badge value={i.verified ? 'verified' : 'unverified'} /><h2>{i.name}</h2><p>{i.external_id || 'Identifier pending verification'}</p><div><span>{i.region} region</span><ArrowRight size={17} /></div></Link>)}</div>}{query.data && !query.data.items.length && <Empty title="No matching institutions" />}{query.data && <Pager page={query.data} cursor={params.get('cursor')} setCursor={value => { const next = new URLSearchParams(params); value ? next.set('cursor', value) : next.delete('cursor'); setParams(next); }} />}</>;
+  return <><Heading eyebrow="CANONICAL DIRECTORY" title="Institutions" description="Start with a verified identity. Explore the case history you are authorized to see." action={<NewInstitution />} /><form className="filters" onSubmit={e => { e.preventDefault(); setParams({ q: String(new FormData(e.currentTarget).get('q')) }); }}><div className="search-input"><Search size={16} /><input name="q" aria-label="Search institutions" defaultValue={params.get('q') || ''} placeholder="Institution name or verified identifier…" /><button className="text-button">Search</button></div></form><ErrorBox error={query.error} retry={() => query.refetch()} />{query.isPending ? <Loading /> : <div className="institution-grid">{query.data?.items.map(i => <Link key={i.id} to={`/institutions/${i.id}`} className="card institution-card"><span className="institution-icon"><Building2 size={25} /></span><Badge value={i.verified ? 'verified' : 'unverified'} /><h2>{i.name}</h2><p>{i.external_id || 'Identifier pending verification'}</p><div><span>{i.region} region</span><ArrowRight size={17} /></div></Link>)}</div>}{query.data && !query.data.items.length && <Empty title="No institutions in directory">Authorized institutions must be registered or imported with verified AICTE identifiers.</Empty>}{query.data && <Pager page={query.data} cursor={params.get('cursor')} setCursor={value => { const next = new URLSearchParams(params); value ? next.set('cursor', value) : next.delete('cursor'); setParams(next); }} />}</>;
 }
 function InstitutionDetail() {
   const { id } = useParams(); const school = useData<Institution>(`/institutions/${id}`);

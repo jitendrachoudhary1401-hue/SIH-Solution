@@ -77,6 +77,22 @@ class ReviewChange(Change):
     decision: str
 
 
+class InstitutionCreate(Input):
+    name: str = Field(min_length=3, max_length=200)
+    external_id: str | None = Field(default=None, max_length=60)
+    region: str = Field(min_length=2, max_length=80)
+    address: str = Field(min_length=5, max_length=300)
+    verified: bool = False
+
+
+class UserProvision(Input):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=180)
+    role: str
+    bureau_id: int | None = None
+    password: str = Field(min_length=12, max_length=128)
+
+
 def parse(schema):
     try:
         return schema.model_validate(request.get_json(silent=True) or {})
@@ -272,6 +288,56 @@ def institutions():
         term = "%" + request.args["q"][:120] + "%"
         query = query.where(or_(Institution.name.ilike(term), Institution.external_id.ilike(term)))
     return page(query.order_by(Institution.id.desc()), institution_json, Institution)
+
+
+@api.post("/institutions")
+@authenticated
+def register_institution():
+    if g.user.role not in ("admin", "lead", "officer"):
+        abort(403, description="Only authorized personnel may register institutions.")
+    data = parse(InstitutionCreate)
+    if data.external_id:
+        existing = db.session.scalar(select(Institution).where(Institution.external_id == data.external_id.strip()))
+        if existing:
+            abort(409, description="An institution with this AICTE identifier already exists.")
+    inst = Institution(
+        name=data.name.strip(),
+        external_id=data.external_id.strip() if data.external_id else None,
+        region=data.region.strip(),
+        address=data.address.strip(),
+        verified=data.verified and g.user.role in ("admin", "lead")
+    )
+    db.session.add(inst)
+    db.session.commit()
+    return institution_json(inst), 201
+
+
+@api.post("/users/provision")
+@authenticated
+def provision_user_account():
+    if g.user.role != "admin":
+        abort(403, description="Only an administrator may provision user accounts.")
+    data = parse(UserProvision)
+    if data.role not in ("officer", "lead", "reviewer", "auditor", "executive", "admin"):
+        abort(422, description="Invalid role.")
+    bureau = None
+    if data.role in ("officer", "lead"):
+        if not data.bureau_id or not db.session.get(Bureau, data.bureau_id):
+            abort(422, description="Officers and leads must be assigned to an active bureau.")
+    existing = db.session.scalar(select(User).where(User.email == data.email.strip().lower()))
+    if existing:
+        abort(409, description="A user with this email address already exists.")
+    user = User(
+        name=data.name.strip(),
+        email=data.email.strip().lower(),
+        role=data.role,
+        bureau_id=data.bureau_id if data.role in ("officer", "lead") else None,
+        password_hash=hasher.hash(data.password),
+        active=True
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user_json(user), 201
 
 
 @api.get("/institutions/<int:item_id>")
