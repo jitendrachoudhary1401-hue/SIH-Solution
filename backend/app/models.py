@@ -1,0 +1,217 @@
+from datetime import datetime, timezone
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import CheckConstraint, UniqueConstraint
+
+db = SQLAlchemy()
+
+
+def now():
+    return datetime.now(timezone.utc)
+
+
+def iso(value):
+    if value is None:
+        return None
+    return value.replace(tzinfo=timezone.utc).isoformat() if value.tzinfo is None else value.isoformat()
+
+
+class Bureau(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(180), unique=True, nullable=False)
+    password_hash = db.Column(db.Text, nullable=False)
+    role = db.Column(db.String(30), nullable=False, default="officer")
+    bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"))
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    bureau = db.relationship(Bureau)
+
+
+class Session(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    csrf = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    user = db.relationship(User)
+
+
+class LoginAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(64), nullable=False, index=True)
+    at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
+class Institution(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    external_id = db.Column(db.String(60), unique=True)
+    verified = db.Column(db.Boolean, nullable=False, default=False)
+    region = db.Column(db.String(80), nullable=False)
+    address = db.Column(db.String(300), nullable=False)
+
+
+class Complaint(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reference = db.Column(db.String(40), nullable=False, unique=True)
+    institution_id = db.Column(db.Integer, db.ForeignKey("institution.id"), nullable=False, index=True)
+    category = db.Column(db.String(80), nullable=False, index=True)
+    description = db.Column(db.Text, nullable=False)
+    priority = db.Column(db.String(20), nullable=False, default="normal")
+    status = db.Column(db.String(30), nullable=False, default="received", index=True)
+    bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"), nullable=False, index=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    received_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
+    due_at = db.Column(db.DateTime(timezone=True), index=True)
+    deadline_policy = db.Column(db.String(120), nullable=False, default="Illustrative elapsed-time policy v1")
+    deadline_revision = db.Column(db.Integer, nullable=False, default=1)
+    next_action = db.Column(db.String(500), nullable=False, default="Review the complaint")
+    version = db.Column(db.Integer, nullable=False, default=1)
+    content_revision = db.Column(db.Integer, nullable=False, default=1)
+    matching_state = db.Column(db.String(30), nullable=False, default="queued")
+    matching_error = db.Column(db.String(300))
+    institution = db.relationship(Institution)
+    bureau = db.relationship(Bureau)
+    owner = db.relationship(User)
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (
+        CheckConstraint("status IN ('received','under_review','awaiting_information','disposed')"),
+        CheckConstraint("priority IN ('low','normal','high','urgent')"),
+    )
+
+
+class Grant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    __table_args__ = (UniqueConstraint("user_id", "complaint_id"),)
+
+
+class Assignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False, index=True)
+    bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"), nullable=False)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    ended_at = db.Column(db.DateTime(timezone=True))
+    reason = db.Column(db.String(2000), nullable=False)
+
+
+class Transfer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    from_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    to_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    reason = db.Column(db.String(2000), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    acknowledged_at = db.Column(db.DateTime(timezone=True))
+
+
+class ActionEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), index=True)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    actor_name = db.Column(db.String(120), nullable=False)
+    bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"))
+    kind = db.Column(db.String(60), nullable=False)
+    summary = db.Column(db.String(500), nullable=False)
+    reason = db.Column(db.Text, nullable=False, default="")
+    changes = db.Column(db.JSON, nullable=False, default=dict)
+    outcome = db.Column(db.String(20), nullable=False, default="succeeded")
+    severity = db.Column(db.String(20), nullable=False, default="info")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
+    complaint = db.relationship(Complaint)
+
+
+class Attachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    filename = db.Column(db.String(200), nullable=False)
+    key = db.Column(db.String(80), nullable=False, unique=True)
+    media_type = db.Column(db.String(80), nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    checksum = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"))
+    kind = db.Column(db.String(50), nullable=False)
+    message = db.Column(db.String(500), nullable=False)
+    dedup_key = db.Column(db.String(180), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    read_at = db.Column(db.DateTime(timezone=True))
+
+
+class Job(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    revision = db.Column(db.Integer, nullable=False)
+    dedup_key = db.Column(db.String(150), nullable=False, unique=True)
+    state = db.Column(db.String(20), nullable=False, default="queued", index=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    available_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    lease_until = db.Column(db.DateTime(timezone=True))
+    error = db.Column(db.String(300))
+
+
+class MatchingRun(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    revision = db.Column(db.Integer, nullable=False)
+    bundle = db.Column(db.JSON, nullable=False)
+    evidence = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
+class Embedding(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    revision = db.Column(db.Integer, nullable=False)
+    model = db.Column(db.String(250), nullable=False)
+    digest = db.Column(db.String(64), nullable=False)
+    vector = db.Column(db.JSON, nullable=False)
+    truncated = db.Column(db.Boolean, nullable=False)
+    __table_args__ = (UniqueConstraint("complaint_id", "revision", "model"),)
+
+
+class Pair(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    case_a_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    case_b_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    run_id = db.Column(db.Integer, db.ForeignKey("matching_run.id"), nullable=False)
+    evidence = db.Column(db.JSON, nullable=False)
+    band = db.Column(db.String(20), nullable=False)
+    state = db.Column(db.String(20), nullable=False, default="pending")
+    version = db.Column(db.Integer, nullable=False, default=1)
+    a = db.relationship(Complaint, foreign_keys=[case_a_id])
+    b = db.relationship(Complaint, foreign_keys=[case_b_id])
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (UniqueConstraint("case_a_id", "case_b_id"), CheckConstraint("case_a_id < case_b_id"))
+
+
+class Review(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pair_id = db.Column(db.Integer, db.ForeignKey("pair.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    decision = db.Column(db.String(20), nullable=False)
+    reason = db.Column(db.Text, nullable=False)
+    revisions = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    user = db.relationship(User)
+
+
+class Idempotency(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    key = db.Column(db.String(100), nullable=False)
+    digest = db.Column(db.String(64), nullable=False)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    __table_args__ = (UniqueConstraint("user_id", "key"),)
