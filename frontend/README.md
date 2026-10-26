@@ -59,6 +59,12 @@ Browser tests require the full workspace checkout and a Python test environment 
 
 ## Troubleshooting
 
+Unknown frontend URLs display a custom warm, light 404 page with a return link. Known protected routes still send signed-out visitors to sign-in.
+
+Network errors, request timeouts, browser offline events and API gateway failures (502/503/504) automatically clear the visible session and query cache. A persistent logout marker prevents a reload or another tab from restoring the previous session. When connectivity returns, the frontend revokes the old server session before allowing another sign-in. An unreachable backend cannot revoke its session immediately; the local workspace is hidden immediately and server revocation is retried on reconnect, every 15 seconds while signed out, and before sign-in. Normal authorization/validation errors and missing records do not trigger connection logout.
+
+During an outage, a dedicated warm, light screen displays **“Backend is down. Try again later.”** and confirms automatic logout. The **Try again** button and automatic recovery checks keep the screen visible while the service is unavailable. Once the old session is revoked or confirmed expired, the sign-in screen returns; the previous workspace does not reopen automatically.
+
 - **`Backend connection is not configured`:** set `BACKEND_URL` in Vercel, then redeploy.
 - **Login returns to the sign-in page:** keep `VITE_API_BASE_URL=/api`, verify that requests reach the Vercel proxy, and use HTTPS with `COOKIE_SECURE=true` on Render.
 - **Frontend route returns 404:** verify the root directory and `vercel.json` SPA fallback.

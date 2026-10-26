@@ -451,3 +451,10 @@ tbody tr:hover { background: #fcf7ef; }
 }
 @media(max-width:390px) { .stats { grid-template-columns: 1fr; } .stat-card { padding: 20px; } .stat-card>div { font-size: 15px; } .stat-card>strong { font-size: 42px; margin: 17px 0; } .stat-card>p { font-size: 13px; } .stat-icon { width: 34px; height: 34px; } .stat-icon svg { width: 19px; height: 19px; } .page-heading h1 { font-size: 27px; } .breadcrumb { font-size: 12px; gap: 4px; } .topbar-actions { gap: 3px; } .filter-tabs { gap: 15px; } .filter-tabs button { font-size: 13px; } .login-card { padding: 24px; } .login-brand small { max-width: 190px; line-height: 1.6; } }
 @media(prefers-reduced-motion:reduce) { *,*:before,*:after { animation: none!important; transition: none!important; scroll-behavior: auto!important; } }
+.not-found { min-height: 75dvh; display: grid; place-items: center; padding: 28px 20px; }
+.not-found-card { width: min(100%, 620px); padding: clamp(25px, 6vw, 56px); text-align: center; border-top: 5px solid #aa583d; }
+.not-found-card .brand-logo { width: 64px; height: 64px; margin: 0 auto 20px; }
+.not-found-number { color: #aa583d; font-size: clamp(80px, 18vw, 128px); font-weight: 750; line-height: 1.1; letter-spacing: -5px; }
+.not-found-card>svg { color: #aa583d; margin: 20px auto 8px; }
+.not-found-card h1 { font-size: clamp(25px, 5vw, 34px); line-height: 1.25; }
+.not-found-card>p:not(.eyebrow) { color: #6b6258; line-height: 1.8; margin: 18px 0 28px; }

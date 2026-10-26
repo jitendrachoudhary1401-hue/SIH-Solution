@@ -24,12 +24,57 @@ export class ApiError extends Error { constructor(message: string, public status
 let csrf = '';
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 export function setCsrf(value: string) { csrf = value; }
+const pendingLogoutKey = 'onecase.logout-pending';
+export function hasPendingLogout() { return localStorage.getItem(pendingLogoutKey) === '1'; }
+export function connectionLost() {
+  localStorage.setItem(pendingLogoutKey, '1');
+  csrf = '';
+  window.dispatchEvent(new Event('connection-lost'));
+}
+let revoking: Promise<void> | undefined;
+export function finishPendingLogout(): Promise<void> {
+  if (!hasPendingLogout()) return Promise.resolve();
+  if (revoking) return revoking;
+  revoking = (async () => {
+    try {
+      const identity = await api<{csrf: string}>('/auth/me');
+      setCsrf(identity.csrf);
+      await post('/auth/logout', {});
+      localStorage.removeItem(pendingLogoutKey);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) localStorage.removeItem(pendingLogoutKey);
+      else throw error;
+    } finally { csrf = ''; }
+  })().finally(() => { revoking = undefined; });
+  return revoking;
+}
+export function logoutSession() {
+  localStorage.setItem(pendingLogoutKey, '1');
+  return finishPendingLogout();
+}
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const form = options.body instanceof FormData;
-  const response = await fetch(apiBase + path, { ...options, credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
-  const data = await response.json().catch(() => ({}));
+  let response: Response;
+  try {
+    response = await fetch(apiBase + path, { ...options, signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000), credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    connectionLost();
+    throw new ApiError('Connection lost. You have been signed out. Reconnect and sign in again.', 0);
+  }
+  if ([502, 503, 504].includes(response.status)) {
+    connectionLost();
+    throw new ApiError('The service is unavailable. You have been signed out. Try signing in again when it is available.', response.status);
+  }
+  const data = await response.json().catch((error: unknown) => {
+    if (error instanceof TypeError || (error instanceof DOMException && error.name !== 'SyntaxError')) {
+      connectionLost();
+      throw new ApiError('Connection lost while receiving the response. Sign in again after reconnecting.', 0);
+    }
+    return {};
+  });
   if (!response.ok) {
-    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') window.dispatchEvent(new CustomEvent('session-expired'));
+    if (response.status === 401 && path !== '/auth/login' && !hasPendingLogout() && (path !== '/auth/me' || csrf)) window.dispatchEvent(new CustomEvent('session-expired'));
     throw new ApiError(data.error?.message || `Request failed (${response.status})`, response.status, !!data.error?.mfa_required);
   }
   return data;

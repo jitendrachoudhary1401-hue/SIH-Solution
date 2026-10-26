@@ -1,4 +1,4 @@
-import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type ReactElement } from 'react';
+import { Children, cloneElement, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type ReactElement } from 'react';
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -6,6 +6,9 @@ import { Auth, Toast, useData, ErrorBox, Loading, Empty, Badge, Modal, useSave, 
 import WorkflowPanel from './features/WorkflowPanel';
 import AdminWorkspace from './features/AdminWorkspace';
 import AccountSecurity from './features/AccountSecurity';
+import NotFound from './features/NotFound';
+import BackendUnavailable from './features/BackendUnavailable';
+import { connectionLost, finishPendingLogout, hasPendingLogout, logoutSession } from './lib/api';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Building2, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileCheck2, FileText, FolderOpen, LayoutDashboard, Link2, LogOut, Menu, Plus, Search, ShieldCheck, Upload, X, Eye, EyeOff, AlertCircle, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, post, setCsrf, date, label, ApiError, type Case, type Directory, type Event, type Institution, type Page, type Pair, type Summary, type User } from './lib/api';
@@ -19,22 +22,69 @@ function Access({capability, children}: {capability: string; children: ReactNode
 
 export default function App() {
   const client = useQueryClient(); const [message, setMessage] = useState('');
+  const navigate = useNavigate(); const location = useLocation();
+  const [signedOut, setSignedOut] = useState(hasPendingLogout);
+  const [connectionFailure, setConnectionFailure] = useState(hasPendingLogout);
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const recoveryInProgress = useRef(false);
+  const checkConnection = useCallback(async () => {
+    if (recoveryInProgress.current || !navigator.onLine) return;
+    recoveryInProgress.current = true; setCheckingConnection(true);
+    try {
+      if (hasPendingLogout()) await finishPendingLogout();
+      else await api('/health');
+      setConnectionFailure(false);
+    } catch { /* Keep the outage screen and the pending logout until recovery. */ }
+    finally { recoveryInProgress.current = false; setCheckingConnection(false); }
+  }, []);
   const [expired, setExpired] = useState(false);
-  const identity = useQuery({ queryKey: ['identity'], queryFn: () => api<{ user: User; csrf: string }>('/auth/me'), retry: false, staleTime: 5 * 60000 });
+  const identity = useQuery({ queryKey: ['identity'], queryFn: () => api<{ user: User; csrf: string }>('/auth/me'), enabled: !signedOut, retry: false, staleTime: 5 * 60000 });
   useEffect(() => { if (identity.data) setCsrf(identity.data.csrf); }, [identity.data]);
-  useEffect(() => { const listener = () => { setExpired(true); client.clear(); window.location.assign('/officer/login?expired=1'); }; window.addEventListener('session-expired', listener); return () => window.removeEventListener('session-expired', listener); }, [client]);
+  useEffect(() => {
+    const disconnect = (connection: boolean) => {
+      setSignedOut(true); setConnectionFailure(connection); setExpired(!connection); setCsrf(''); setMessage('');
+      void client.cancelQueries(); client.clear(); navigate('/officer/login', {replace: true});
+    };
+    const expiredListener = () => disconnect(false);
+    const connectionListener = () => disconnect(true);
+    const storageListener = () => { if (hasPendingLogout()) disconnect(true); };
+    window.addEventListener('session-expired', expiredListener);
+    window.addEventListener('connection-lost', connectionListener);
+    window.addEventListener('offline', connectionLost);
+    window.addEventListener('storage', storageListener);
+    return () => {
+      window.removeEventListener('session-expired', expiredListener);
+      window.removeEventListener('connection-lost', connectionListener);
+      window.removeEventListener('offline', connectionLost);
+      window.removeEventListener('storage', storageListener);
+    };
+  }, [client, navigate]);
+  useEffect(() => {
+    if (!signedOut) return;
+    const retry = () => { void checkConnection(); };
+    window.addEventListener('online', retry); retry();
+    const timer = window.setInterval(retry, 15000);
+    return () => { window.removeEventListener('online', retry); window.clearInterval(timer); };
+  }, [signedOut, checkConnection]);
   useEffect(() => { if (message) { const timer = setTimeout(() => setMessage(''), 5000); return () => clearTimeout(timer); } }, [message]);
-  const logout = async () => { await post('/auth/logout', {}); setCsrf(''); client.clear(); window.location.assign('/officer/login'); };
-  if (identity.isPending) return <Loading />;
-  if (!identity.data) return <Login expired={expired} onSuccess={data => { setCsrf(data.csrf); client.removeQueries({ predicate: query => query.queryKey[0] !== 'identity' }); client.setQueryData(['identity'], data); }} />;
-  return <Auth.Provider value={{ user: identity.data.user, logout }}><Toast.Provider value={setMessage}><Routes><Route element={<Shell />}><Route path="/dashboard" element={<Access capability="dashboard"><Dashboard /></Access>} /><Route path="/complaints" element={<Access capability="cases"><Complaints /></Access>} /><Route path="/complaints/:id" element={<CaseDetail />} /><Route path="/institutions" element={<Access capability="institutions"><Institutions /></Access>} /><Route path="/institutions/:id" element={<InstitutionDetail />} /><Route path="/overlaps" element={<Access capability="overlaps"><Overlaps /></Access>} /><Route path="/overlaps/:id" element={<OverlapDetail />} /><Route path="/alerts" element={<Access capability="alerts"><Alerts /></Access>} /><Route path="/audit-logs" element={<Access capability="audit"><Audit /></Access>} /><Route path="/reports" element={<Access capability="reports"><Reports /></Access>} /><Route path="/administration" element={<Access capability="admin"><AdminWorkspace /></Access>} /><Route path="/account-security" element={<AccountSecurity />} /><Route path="*" element={<Navigate to={homeFor(identity.data.user)} replace />} /></Route></Routes>{message && <div className="toast" role="status"><CheckCheck size={18} />{message}<button aria-label="Dismiss notification" className="icon-button" onClick={() => setMessage('')}><X size={16} /></button></div>}</Toast.Provider></Auth.Provider>;
+  const logout = async () => { const pending = logoutSession(); setSignedOut(true); setConnectionFailure(false); setExpired(false); setCsrf(''); setMessage(''); await client.cancelQueries(); client.clear(); navigate('/officer/login', {replace: true}); await pending.catch(() => {}); };
+  if (connectionFailure) return <BackendUnavailable checking={checkingConnection} onRetry={() => void checkConnection()} />;
+  if (!signedOut && identity.isPending) return <Loading />;
+  if (signedOut || !identity.data) {
+    if (!['/', '/officer/login'].includes(location.pathname)) {
+      const protectedRoute = /^\/(dashboard|complaints(?:\/\d+)?|institutions(?:\/\d+)?|overlaps(?:\/\d+)?|alerts|audit-logs|reports|administration|account-security)\/?$/.test(location.pathname);
+      return protectedRoute ? <Navigate to="/officer/login" replace /> : <NotFound destination="/officer/login" />;
+    }
+    return <Login expired={expired} connectionFailure={connectionFailure} onSuccess={data => { setCsrf(data.csrf); setSignedOut(false); setConnectionFailure(false); setExpired(false); client.removeQueries({ predicate: query => query.queryKey[0] !== 'identity' }); client.setQueryData(['identity'], data); }} />;
+  }
+  return <Auth.Provider value={{ user: identity.data.user, logout }}><Toast.Provider value={setMessage}><Routes><Route element={<Shell />}><Route path="/dashboard" element={<Access capability="dashboard"><Dashboard /></Access>} /><Route path="/complaints" element={<Access capability="cases"><Complaints /></Access>} /><Route path="/complaints/:id" element={<CaseDetail />} /><Route path="/institutions" element={<Access capability="institutions"><Institutions /></Access>} /><Route path="/institutions/:id" element={<InstitutionDetail />} /><Route path="/overlaps" element={<Access capability="overlaps"><Overlaps /></Access>} /><Route path="/overlaps/:id" element={<OverlapDetail />} /><Route path="/alerts" element={<Access capability="alerts"><Alerts /></Access>} /><Route path="/audit-logs" element={<Access capability="audit"><Audit /></Access>} /><Route path="/reports" element={<Access capability="reports"><Reports /></Access>} /><Route path="/administration" element={<Access capability="admin"><AdminWorkspace /></Access>} /><Route path="/account-security" element={<AccountSecurity />} /><Route path="/" element={<Navigate to={homeFor(identity.data.user)} replace />} /><Route path="/officer/login" element={<Navigate to={homeFor(identity.data.user)} replace />} /><Route path="*" element={<NotFound destination={homeFor(identity.data.user)} />} /></Route></Routes>{message && <div className="toast" role="status"><CheckCheck size={18} />{message}<button aria-label="Dismiss notification" className="icon-button" onClick={() => setMessage('')}><X size={16} /></button></div>}</Toast.Provider></Auth.Provider>;
 }
 
-function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: string }) => void; expired: boolean }) {
+function Login({ onSuccess, expired, connectionFailure }: { onSuccess: (data: { user: User; csrf: string }) => void; expired: boolean; connectionFailure: boolean }) {
   const [show, setShow] = useState(false); const [mfa, setMfa] = useState(false); const navigate = useNavigate();
-  const mutation = useMutation({ mutationFn: (data: { email: string; password: string; verification_code: string }) => post<{ user: User; csrf: string }>('/auth/login', data), onSuccess: data => { onSuccess(data); navigate(data.user.capabilities.admin ? '/administration' : data.user.capabilities.dashboard ? '/dashboard' : '/complaints'); }, onError: error => { if (error instanceof ApiError && error.mfaRequired) setMfa(true); } });
+  const mutation = useMutation({ mutationFn: async (data: { email: string; password: string; verification_code: string }) => { await finishPendingLogout(); return post<{ user: User; csrf: string }>('/auth/login', data); }, onSuccess: data => { onSuccess(data); navigate(data.user.capabilities.admin ? '/administration' : data.user.capabilities.dashboard ? '/dashboard' : '/complaints'); }, onError: error => { if (error instanceof ApiError && error.mfaRequired) setMfa(true); } });
   function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = new FormData(e.currentTarget); mutation.mutate({ email: String(form.get('email')), password: String(form.get('password')), verification_code: String(form.get('verification_code') || '') }); }
-  return <div className="login"><section className="login-story"><p className="eyebrow">ONE CONNECTED WORKSPACE</p><h2>A clear path.<br />An accountable outcome.</h2><p>Bring institution records, responsible officers and every next step together.</p><ol><li><span>01</span><div><strong>Receive with clarity</strong><p>Preserve the original source and receipt date.</p></div></li><li><span>02</span><div><strong>Coordinate with confidence</strong><p>Keep proceedings and internal ownership distinct.</p></div></li><li><span>03</span><div><strong>Close with evidence</strong><p>Record independent verification and a reasoned outcome.</p></div></li></ol></section><div className="login-brand"><img className="brand-logo" src="/logo.png" alt="AICTE" /><span>OneCase<small>Institution complaint coordination</small></span></div><main className="login-card"><p className="eyebrow">OFFICER WORKSPACE</p><h1>Officer sign in</h1><p>Access your authorized bureau workspace and case records.</p>{(expired || location.search.includes('expired')) && <div className="notice">Your session expired. Sign in to continue.</div>}<form onSubmit={submit}><Field title="Email address"><input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required /></Field><Field title="Password"><div className="password-input"><input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required /><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>{mfa && <Field title="Authenticator or recovery code"><input name="verification_code" autoComplete="one-time-code" required /></Field>}<FormError mutation={mutation} /><button className="button primary full" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in…' : 'Sign in to workspace'}<ArrowRight size={17} /></button></form><div className="login-foot"><ShieldCheck size={15} /> Access for provisioned officers only</div></main><p className="login-bottom">One workspace. Clear ownership. Accountable action.</p><p className="demo-login">Local demonstration · synthetic records<br />Demo lead: <code>lead.rb@onecase.demo</code> · <code>OneCaseDemo!2026</code></p></div>;
+  return <div className="login"><section className="login-story"><p className="eyebrow">ONE CONNECTED WORKSPACE</p><h2>A clear path.<br />An accountable outcome.</h2><p>Bring institution records, responsible officers and every next step together.</p><ol><li><span>01</span><div><strong>Receive with clarity</strong><p>Preserve the original source and receipt date.</p></div></li><li><span>02</span><div><strong>Coordinate with confidence</strong><p>Keep proceedings and internal ownership distinct.</p></div></li><li><span>03</span><div><strong>Close with evidence</strong><p>Record independent verification and a reasoned outcome.</p></div></li></ol></section><div className="login-brand"><img className="brand-logo" src="/logo.png" alt="AICTE" /><span>OneCase<small>Institution complaint coordination</small></span></div><main className="login-card"><p className="eyebrow">OFFICER WORKSPACE</p><h1>Officer sign in</h1><p>Access your authorized bureau workspace and case records.</p>{(expired || location.search.includes('expired')) && <div className="notice">Your session expired. Sign in to continue.</div>}{connectionFailure && <div className="notice" role="alert">Connection lost. You have been signed out. Reconnect and sign in again to continue.</div>}<form onSubmit={submit}><Field title="Email address"><input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required /></Field><Field title="Password"><div className="password-input"><input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required /><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>{mfa && <Field title="Authenticator or recovery code"><input name="verification_code" autoComplete="one-time-code" required /></Field>}<FormError mutation={mutation} /><button className="button primary full" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in…' : 'Sign in to workspace'}<ArrowRight size={17} /></button></form><div className="login-foot"><ShieldCheck size={15} /> Access for provisioned officers only</div></main><p className="login-bottom">One workspace. Clear ownership. Accountable action.</p><p className="demo-login">Local demonstration · synthetic records<br />Demo lead: <code>lead.rb@onecase.demo</code> · <code>OneCaseDemo!2026</code></p></div>;
 }
 
 const nav = [{ path: '/dashboard', label: 'Overview', icon: LayoutDashboard }, { path: '/complaints', label: 'Complaints', icon: FolderOpen }, { path: '/institutions', label: 'Institutions', icon: Building2 }, { path: '/overlaps', label: 'Overlap review', icon: Link2 }, { path: '/alerts', label: 'Alerts', icon: Bell }, { path: '/audit-logs', label: 'Action logs', icon: Activity }, { path: '/reports', label: 'Reports', icon: FileCheck2 }, { path: '/administration', label: 'Administration', icon: ShieldCheck }, { path: '/account-security', label: 'Account security', icon: ShieldCheck }];
