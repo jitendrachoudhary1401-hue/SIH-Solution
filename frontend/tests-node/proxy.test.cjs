@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 let handler;
-test.before(async () => { handler = (await import('../frontend/api/proxy.js')).default; });
+test.before(async () => { handler = (await import('../api/proxy.js')).default; });
 
 async function listen(server) { await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve)); return `http://127.0.0.1:${server.address().port}`; }
 async function close(server) { await new Promise(resolve=>server.close(resolve)); }

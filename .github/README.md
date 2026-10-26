@@ -4,7 +4,9 @@
 
 It runs backend tests plus the production frontend build and browser checks. Browser tests use a disposable local database, synthetic accounts and an explicitly isolated scanner fixture. The optional real-model test is skipped unless local model setup is enabled separately.
 
-The workflow requires **no Neon, AWS, Render, Vercel or other production secrets**. It has read-only repository permissions, cancels superseded runs, limits job duration, and pins third-party actions to immutable commits. Failed browser runs upload traces/screenshots for seven days; fixtures contain no real complainant information.
+The workflow requires **no Neon, Render, Vercel or other production secrets**. It has read-only repository permissions, cancels superseded runs, limits job duration, and pins third-party actions to immutable commits. Failed browser runs upload traces/screenshots for seven days; fixtures contain no real complainant information.
+
+Frontend build and proxy checks run from `frontend`. Backend tests also verify a copied backend folder can migrate and serve its health endpoint without workspace env files or the frontend. Deploy with Vercel Root Directory `frontend` and Render Root Directory `backend`; configs are inside each folder. Browser tests use both folders for their synthetic test server.
 
 ## Team flow
 

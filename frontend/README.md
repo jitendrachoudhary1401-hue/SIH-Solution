@@ -49,6 +49,7 @@ Keep individual uploads within the backend's deployed limit (default 3 MiB) and 
 
 ```powershell
 npm run build
+npm run test:proxy
 npx playwright install chromium
 npm run test:e2e
 ```

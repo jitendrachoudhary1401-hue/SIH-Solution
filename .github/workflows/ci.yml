@@ -55,14 +55,15 @@ jobs:
           python-version: '3.14'
       - name: Install dependencies
         run: |
-          npm ci
           npm --prefix frontend ci
           python -m venv .venv
           .venv/bin/python -m pip install -r backend/requirements-test.txt
       - name: Build frontend
+        working-directory: frontend
         run: npm run build
       - name: Verify deployment proxy
-        run: node --test scripts/proxy.test.cjs
+        working-directory: frontend
+        run: npm run test:proxy
       - name: Install test browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
