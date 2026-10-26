@@ -17,3 +17,5 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .deadline-details{font-size:10px;color:var(--muted);margin:14px 0}.deadline-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:9px;margin:12px 0}.deadline-details p{margin:10px 0;font-size:10px}.deadline-block>.button{margin:8px 0 14px}.badge.paused{background:#f5f0ff;border-color:#e3d6f5;color:#9274b7}
+
+@media(max-width:767px){.filters .field{flex:1 1 130px;min-width:120px}.filters .field input[type=date]{min-height:30px;font-size:10px}}

@@ -114,7 +114,7 @@ Stop web and worker writers before taking the combined local database/document s
 .venv/Scripts/python.exe backend/backup.py restore .runtime/backups/onecase-demo.zip --target .runtime/restored-demo
 ```
 
-Restore refuses an existing target, validates archive paths and SHA-256 checksums, and runs SQLite integrity checks. To run the restored copy, point `DATABASE_URL` at its absolute SQLite database path and set `STORAGE_PATH` through an app configuration override. `test_backup.py` exercises a synthetic case, history and protected document across save/restore.
+Restore refuses an existing target, validates archive paths and SHA-256 checksums, and runs SQLite integrity checks. To run the restored copy, point `DATABASE_URL` at its absolute SQLite database path and set `STORAGE_PATH` to its documents directory. `test_backup.py` exercises a synthetic case, history and protected document across save/restore.
 
 For PostgreSQL, stop writers and use `pg_dump`/`pg_restore` plus an accompanying archive of the private runtime documents volume. Restore into a fresh database/volume, run migrations and verify complaint/event counts and attachment checksums before resuming. PostgreSQL restore and multi-worker/concurrency tests still require a PostgreSQL environment.
 
