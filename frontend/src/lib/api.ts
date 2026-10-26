@@ -5,13 +5,14 @@ export type Case = {
   priority: string; status: string; bureau: string; bureau_id: number; owner: string; owner_id: number;
   received_at: string; due_at: string | null; deadline_condition: string; deadline_policy: string;
   next_action: string; version: number; content_revision: number; matching_state: string; matching_error: string | null;
+  paused_at: string | null; deadline_config: Record<string, unknown>; pauses?: {id: number; started_at: string; ended_at: string | null; reason: string}[];
   can_edit?: boolean; can_transfer?: boolean; allowed_transitions?: string[];
   attachments?: { id: number; filename: string; size: number; checksum: string }[];
   transfers?: { id: number; to_owner_id: number; created_at: string; acknowledged_at: string | null }[];
 };
 export type Event = { id: number; complaint_id: number; reference: string; actor: string; kind: string; summary: string; reason: string; changes: Record<string, unknown>; outcome: string; severity: string; created_at: string };
 export type Page<T> = { items: T[]; nextCursor: number | null; total: number; asOf: string };
-export type Directory = { bureaus: { id: number; code: string; name: string }[]; officers: User[]; categories: string[] };
+export type Directory = { bureaus: { id: number; code: string; name: string }[]; officers: User[]; categories: string[]; deadline_rules: {id: string; name: string}[] };
 export type Pair = { id: number; a: Case; b: Case; state: string; band: string; version: number; stale: boolean; can_review?: boolean;
   evidence: { hybrid: number; cosine: number; reranker_raw: number; signals: Record<string, number>; truncated: boolean; shared_terms: string[]; explanation: string; bundle: { scoring_version: string; validated: boolean; top_k: number; embedding: { model: string; revision: string }; reranker: { model: string; revision: string } }; revisions: Record<string, number> };
   reviews?: { id: number; reviewer: string; decision: string; reason: string; created_at: string }[] };

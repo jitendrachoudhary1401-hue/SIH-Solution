@@ -81,9 +81,10 @@ def test_transfer_atomic_ownership_and_access(client, app):
 
 def test_attachments_protected_and_validated(client):
     headers = login(client)
-    invalid = client.post("/api/complaints/1/attachments", headers=headers, data={"version": "1", "file": (io.BytesIO(b"<script>"), "bad.pdf")})
+    version = str(client.get("/api/complaints/1").json["version"])
+    invalid = client.post("/api/complaints/1/attachments", headers=headers, data={"version": version, "file": (io.BytesIO(b"<script>"), "bad.pdf")})
     assert invalid.status_code == 422
-    uploaded = client.post("/api/complaints/1/attachments", headers=headers, data={"version": "1", "file": (io.BytesIO(b"%PDF-1.4\nSynthetic test evidence"), "evidence.pdf")})
+    uploaded = client.post("/api/complaints/1/attachments", headers=headers, data={"version": version, "file": (io.BytesIO(b"%PDF-1.4\nSynthetic test evidence"), "evidence.pdf")})
     assert uploaded.status_code == 201
     attachment = client.get("/api/complaints/1").json["attachments"][0]
     assert client.get(f"/api/attachments/{attachment['id']}/download").status_code == 200

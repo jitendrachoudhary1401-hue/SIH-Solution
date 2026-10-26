@@ -179,7 +179,7 @@ def filtered_cases(receipt_dates=True):
     if filters.get("active") == "true":
         query = query.where(Complaint.status != "disposed")
     if filters.get("overdue") == "true":
-        query = query.where(Complaint.status != "disposed", Complaint.due_at < now())
+        query = query.where(Complaint.status != "disposed", Complaint.due_at < now(), Complaint.paused_at.is_(None))
     return query
 
 
