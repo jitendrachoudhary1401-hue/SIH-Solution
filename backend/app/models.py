@@ -29,6 +29,11 @@ class User(db.Model):
     role = db.Column(db.String(30), nullable=False, default="officer")
     bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"))
     active = db.Column(db.Boolean, nullable=False, default=True)
+    mfa_secret = db.Column(db.Text)
+    mfa_pending_secret = db.Column(db.Text)
+    mfa_enabled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    recovery_codes = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
+    last_totp_step = db.Column(db.BigInteger)
     bureau = db.relationship(Bureau)
 
 
@@ -37,6 +42,8 @@ class Session(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     csrf = db.Column(db.String(64), nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    last_seen_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, server_default=db.func.now())
+    authenticated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, server_default=db.func.now())
     user = db.relationship(User)
 
 
@@ -143,6 +150,7 @@ class ActionEvent(db.Model):
     outcome = db.Column(db.String(20), nullable=False, default="succeeded")
     severity = db.Column(db.String(20), nullable=False, default="info")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
+    request_id = db.Column(db.String(64), nullable=False, default="", server_default="")
     complaint = db.relationship(Complaint)
 
 
@@ -156,6 +164,9 @@ class Attachment(db.Model):
     checksum = db.Column(db.String(64), nullable=False)
     proceeding_id = db.Column(db.Integer, db.ForeignKey("proceeding.id"))
     sensitivity = db.Column(db.String(30), nullable=False, default="standard")
+    scan_state = db.Column(db.String(30), nullable=False, default="pending", server_default="pending")
+    scan_checked_at = db.Column(db.DateTime(timezone=True))
+    scan_detail = db.Column(db.String(300))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
 
 
