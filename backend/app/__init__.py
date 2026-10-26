@@ -55,6 +55,7 @@ def create_app(config=None):
         AWS_REGION=os.getenv("AWS_REGION", ""),
         AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID", ""),
         AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        FRONTEND_PROXY_SECRET=os.getenv("FRONTEND_PROXY_SECRET", ""),
     )
     app.config.update(config or {})
     if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
@@ -81,6 +82,11 @@ def create_app(config=None):
         from flask import request, abort, g
         from uuid import uuid4
         g.request_id = uuid4().hex
+        proxy_secret = app.config["FRONTEND_PROXY_SECRET"]
+        if proxy_secret and app.config["APP_ENV"] == "production" and request.path.startswith("/api/") and request.path != "/api/health":
+            import hmac
+            if not hmac.compare_digest(proxy_secret, request.headers.get("X-OneCase-Proxy-Key", "")):
+                abort(403, description="Use the configured application origin to access this service.")
         if request.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("Origin")
             if origin and origin.rstrip("/") != request.host_url.rstrip("/"):

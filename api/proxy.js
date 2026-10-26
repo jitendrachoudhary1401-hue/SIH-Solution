@@ -1,6 +1,5 @@
 // Vercel server-only API proxy. Credentials never enter the browser bundle.
 // Same-origin cookies avoid cross-site cookie failures between Vercel and Render.
-const { timingSafeEqual } = require('node:crypto');
 const MAX_BODY = 4 * 1024 * 1024;
 
 module.exports = async function handler(req, res) {
@@ -16,7 +15,11 @@ module.exports = async function handler(req, res) {
   const path = String(req.query?.path || incoming.searchParams.get('path') || '');
   if (!path || path.split('/').some(segment=>segment==='..'||segment==='.') || !/^[a-zA-Z0-9/_\-.]+$/.test(path)) return res.status(400).end();
   const mutating = !['GET','HEAD','OPTIONS'].includes(req.method);
-  if (mutating && (req.headers['sec-fetch-site'] === 'cross-site' || req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)) return res.status(403).json({error:{message:'Cross-origin write request rejected.'}});
+  if (mutating) {
+    let sameOrigin = true;
+    try { if (req.headers.origin) sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch { sameOrigin = false; }
+    if (req.headers['sec-fetch-site'] === 'cross-site' || !sameOrigin) return res.status(403).json({error:{message:'Cross-origin write request rejected.'}});
+  }
   incoming.searchParams.delete('path');
   const target = new URL('/api/'+path, base);
   target.search = incoming.searchParams.toString();
