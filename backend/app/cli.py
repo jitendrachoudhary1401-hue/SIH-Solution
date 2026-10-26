@@ -151,3 +151,67 @@ def register(app):
             event(None, "account_rejected", f"Account request rejected for {req.email} ({req.request_type})", reason, actor=reviewer)
             click.echo(f"Account request #{req.id} rejected. Reason: {reason}")
         db.session.commit()
+
+    @app.cli.command("provision-initial-admin")
+    @click.option("--email", envvar="INITIAL_ADMIN_EMAIL", help="Initial administrator email address (or INITIAL_ADMIN_EMAIL env)")
+    @click.option("--name", envvar="INITIAL_ADMIN_NAME", default="System Administrator", help="Administrator display name")
+    @click.option("--password", envvar="INITIAL_ADMIN_PASSWORD", help="Administrator password (min 12 chars). Prompted securely if omitted.")
+    def provision_initial_admin(email, name, password):
+        """Secure, one-time initial Administrator provisioning command."""
+        from .api import hasher, event
+
+        # Concurrency safety: check for existing admin with row lock
+        existing_admin = db.session.scalar(
+            select(User).where(User.role == "admin").with_for_update()
+        )
+        if existing_admin:
+            raise click.ClickException(
+                "An administrator account already exists. Automatic promotion, duplicate creation, "
+                "or silent credentials overwrite is prohibited."
+            )
+
+        if not email:
+            email = click.prompt("Enter initial administrator email address").strip()
+        else:
+            email = email.strip()
+
+        if not email or "@" not in email or "." not in email.split("@")[-1]:
+            raise click.ClickException("A valid email address is required.")
+
+        # Check if user with this email already exists
+        existing_user = db.session.scalar(select(User).where(User.email == email.lower()))
+        if existing_user:
+            raise click.ClickException(
+                f"A user with email '{email}' already exists with role '{existing_user.role}'. "
+                "Silent elevation or credential overwriting is prohibited."
+            )
+
+        if not password:
+            password = click.prompt("Enter initial administrator password", hide_input=True, confirmation_prompt=True)
+
+        if len(password) < 12:
+            raise click.ClickException("Admin password must be at least 12 characters long.")
+
+        # Use Argon2id password hashing
+        admin_user = User(
+            name=name.strip(),
+            email=email.lower(),
+            password_hash=hasher.hash(password),
+            role="admin",
+            active=True
+        )
+        db.session.add(admin_user)
+        db.session.flush()
+
+        event(
+            case=None,
+            kind="admin_provisioned",
+            summary=f"Initial administrator account provisioned for {admin_user.email}",
+            reason="Authorized CLI one-time provisioning execution",
+            actor=admin_user
+        )
+        db.session.commit()
+
+        click.echo(
+            f"Successfully provisioned initial administrator: {admin_user.email} (Role: admin, MFA: Email OTP enabled)."
+        )

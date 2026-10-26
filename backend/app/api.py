@@ -349,8 +349,10 @@ def login():
             else:
                 lockout.failed_attempts += 1
                 lockout.last_attempt_at = now()
+            event(None, "login_failed", f"Failed password attempt for user {user.id}", reason="Incorrect password", actor=user)
             if lockout.failed_attempts >= 3:
                 lockout.locked_until = now() + timedelta(seconds=60)
+                event(None, "account_locked", f"Temporary 60-second account lockout triggered for user {user.id}", reason="3 consecutive failed password attempts", actor=user)
             db.session.commit()
 
         # Check pending/rejected account requests
@@ -426,6 +428,7 @@ def login():
         db.session.rollback()
         abort(503, description=err_msg or "Failed to deliver verification code. Please check configuration.")
 
+    event(None, "otp_challenge_created", f"OTP challenge initiated for user {user.id}", reason="MFA verification challenge issued", actor=user)
     db.session.commit()
     # Critical: Do NOT create a session or set a session cookie here.
     return jsonify({
@@ -473,8 +476,10 @@ def verify_otp_endpoint():
     if not is_valid:
         challenge.attempts += 1
         remaining = max(0, challenge.max_attempts - challenge.attempts)
+        event(None, "otp_verify_failed", f"Incorrect OTP entered for user {challenge.user_id}", reason=f"Attempt {challenge.attempts}/{challenge.max_attempts}", actor=challenge.user)
         if challenge.attempts >= challenge.max_attempts:
             challenge.status = "invalidated"
+            event(None, "otp_challenge_invalidated", f"OTP challenge invalidated for user {challenge.user_id}", reason="Exceeded maximum failed OTP attempts", actor=challenge.user)
             db.session.commit()
             abort(429, description="Too many incorrect attempts. This code has been invalidated. Please sign in again.")
         db.session.commit()
@@ -509,6 +514,7 @@ def verify_otp_endpoint():
 
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
     db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
+    event(None, "login_success", f"User {user.email} successfully authenticated via OTP MFA", reason="Completed password and OTP verification", actor=user)
     db.session.commit()
 
     response = make_response({"user": user_json(user), "csrf": csrf})
@@ -584,6 +590,7 @@ def resend_otp_endpoint():
         db.session.rollback()
         abort(503, description=err_msg or "Failed to deliver verification code. Please check configuration.")
 
+    event(None, "otp_challenge_resend", f"New OTP challenge generated for user {challenge.user_id}", reason="User requested OTP resend", actor=challenge.user)
     db.session.commit()
     return jsonify({
         "ok": True,
@@ -616,6 +623,7 @@ def refresh():
 @api.post("/auth/logout")
 @authenticated
 def logout():
+    event(None, "logout", f"User {g.user.email} signed out", reason="User initiated session termination", actor=g.user)
     db.session.delete(g.session)
     db.session.commit()
     response = make_response({"ok": True})
