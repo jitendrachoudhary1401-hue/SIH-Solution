@@ -22,10 +22,11 @@ export type Pair = { id: number; a: Case; b: Case; state: string; band: string; 
 export type Summary = { total: number; active: number; overdue: number; pending_pairs: number; confirmed_pairs: number; attention: Case[]; recent: Event[]; trend: { week: string; received: number; disposed: number }[]; asOf: string; policy: string; ageing: { label: string; count: number }[]; matching: { queued: number; failed: number } };
 export class ApiError extends Error { constructor(message: string, public status: number, public mfaRequired = false) { super(message); } }
 let csrf = '';
+const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 export function setCsrf(value: string) { csrf = value; }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const form = options.body instanceof FormData;
-  const response = await fetch('/api' + path, { ...options, credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
+  const response = await fetch(apiBase + path, { ...options, credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') window.dispatchEvent(new CustomEvent('session-expired'));

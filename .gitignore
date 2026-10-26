@@ -15,3 +15,5 @@ backend/.env.local
 playwright-report/
 test-results/
 *.tsbuildinfo
+.agents
+.codex
