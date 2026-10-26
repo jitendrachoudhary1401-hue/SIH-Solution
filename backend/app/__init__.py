@@ -27,8 +27,11 @@ def create_app(config=None):
     # Primary database is PostgreSQL per specification. Falls back to DATABASE_URL if configured.
     default_db_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/onecase")
     
+    engine_options = {"connect_args": {"connect_timeout": 3}} if default_db_url.startswith("postgresql") else {}
+
     app.config.update(
         SQLALCHEMY_DATABASE_URI=default_db_url,
+        SQLALCHEMY_ENGINE_OPTIONS=engine_options,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         STORAGE_PATH=str(runtime / "documents"),
