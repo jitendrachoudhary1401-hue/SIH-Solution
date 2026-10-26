@@ -4,6 +4,12 @@ frontend/dist/
 __pycache__/
 .pytest_cache/
 .env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+.neon
+.neon/
 .runtime/
 *.pyc
 playwright-report/
