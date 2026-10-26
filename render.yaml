@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: onecase-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    preDeployCommand: python backend/migrate.py
+    startCommand: python backend/serve.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: APP_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: STORAGE_BACKEND
+        value: neon
+      - key: STORAGE_BUCKET
+        value: assets
+      - key: MAX_UPLOAD_BYTES
+        value: "3145728"
+      - key: SECRET_KEY
+        sync: false
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_ENDPOINT_URL_S3
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: RATE_LIMIT_STORAGE_URI
+        sync: false
+      - key: FRONTEND_PROXY_SECRET
+        sync: false

@@ -1,5 +1,7 @@
 # OneCase
 
+**Current deployment:** frontend on Vercel, backend on Render, Postgres and private evidence storage on Neon. Start with the [setup guide](SETUP_GUIDE.md), [frontend README](frontend/README.md), [backend README](backend/README.md), and [GitHub workflow guide](.github/README.md). These supersede the older standalone-demo deployment instructions below. Current service verification is in [Neon setup notes](docs/NEON_SETUP.md).
+
 An officer workspace for institution complaint coordination, built from the six specifications in this folder. React 19 + TypeScript + Vite, Flask + SQLAlchemy/Alembic, a database-backed worker, and local Sentence Transformer / Cross-Encoder matching.
 
 ## Run the application on Windows

@@ -17,7 +17,7 @@ logger = logging.getLogger('alembic.env')
 
 def get_engine():
     direct_url = current_app.config.get('DATABASE_URL_UNPOOLED')
-    if direct_url:
+    if direct_url and str(current_app.config['SQLALCHEMY_DATABASE_URI']).startswith('postgresql'):
         from sqlalchemy import create_engine
         if direct_url.startswith(('postgres://', 'postgresql://')):
             direct_url = 'postgresql+psycopg://' + direct_url.split('://', 1)[1]
@@ -104,14 +104,29 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        sqlite = connection.dialect.name == 'sqlite'
+        if sqlite:
+            # Alembic must recreate SQLite tables for additive columns/constraints.
+            # Disable enforcement only on this migration connection and verify it
+            # before restoring enforcement; application connections always use ON.
+            connection.exec_driver_sql('PRAGMA foreign_keys=OFF')
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
             **conf_args
         )
 
-        with context.begin_transaction():
-            context.run_migrations()
+        try:
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            if sqlite:
+                connection.commit()
+                violations = connection.exec_driver_sql('PRAGMA foreign_key_check').fetchall()
+                connection.exec_driver_sql('PRAGMA foreign_keys=ON')
+                if violations:
+                    raise RuntimeError('Migration foreign-key verification failed')
 
 
 if context.is_offline_mode():

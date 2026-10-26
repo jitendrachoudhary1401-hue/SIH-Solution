@@ -4,7 +4,8 @@
   "scripts": {
     "build": "npm --prefix frontend run build",
     "dev": "npm --prefix frontend run dev",
-    "start": "python backend/serve.py",
+    "start": "node scripts/start-app.cjs",
+    "worker": "node scripts/start-app.cjs --worker",
     "test:services": ".venv/Scripts/python.exe backend/tests/live_neon_services.py"
   },
   "dependencies": {

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {"api/proxy.js": {"maxDuration": 30}},
+  "routes": [
+    {"src": "/api/(.*)", "dest": "/api/proxy?path=$1"},
+    {"handle": "filesystem"},
+    {"src": "/.*", "dest": "/index.html"}
+  ]
+}

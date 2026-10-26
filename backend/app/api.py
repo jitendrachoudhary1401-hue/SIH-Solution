@@ -613,8 +613,8 @@ def upload(case_id):
     if not item:
         abort(422, description="Choose a PDF, PNG or JPEG file.")
     content = item.read()
-    if not content or len(content) > 8 * 1024 * 1024:
-        abort(422, description="Evidence must be between 1 byte and 8 MB.")
+    if not content or len(content) > current_app.config["MAX_UPLOAD_BYTES"]:
+        abort(422, description="Evidence exceeds the configured upload limit.")
     count = db.session.scalar(select(func.count()).select_from(Attachment).where(Attachment.complaint_id == case.id))
     if count >= current_app.config["DOCUMENT_LIMIT_PER_CASE"]:
         abort(429, description="This case has reached its evidence file limit.")

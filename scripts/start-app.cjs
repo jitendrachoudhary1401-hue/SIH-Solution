@@ -1,0 +1,10 @@
+const { spawn } = require('node:child_process');
+const { existsSync } = require('node:fs');
+const { join } = require('node:path');
+const windows = join(process.cwd(), '.venv', 'Scripts', 'python.exe');
+const unix = join(process.cwd(), '.venv', 'bin', 'python');
+const python = existsSync(windows) ? windows : existsSync(unix) ? unix : process.env.PYTHON || 'python';
+const script = process.argv.includes('--worker') ? 'backend/worker.py' : 'backend/serve.py';
+const child = spawn(python, [script], { stdio: 'inherit', env: process.env, shell: false });
+child.on('exit', code => process.exit(code || 0));
+child.on('error', () => { console.error('Python application could not start. Install the backend requirements first.'); process.exit(1); });

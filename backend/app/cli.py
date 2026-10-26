@@ -65,22 +65,24 @@ def configure_demo_access(password="OneCaseDemo!2026"):
         if not db.session.scalar(select(User).where(User.email == email)):
             db.session.add(User(name=name, email=email, role=role, password_hash=hasher.hash(password)))
     db.session.flush()
+    permission_keys = {(p.user_id,p.operation,p.bureau_id,p.complaint_id) for p in db.session.scalars(select(PermissionGrant))}
     for email in ("lead.rb@onecase.demo", "lead.pgrc@onecase.demo"):
         user = db.session.scalar(select(User).where(User.email == email))
         if not user:
             continue
         for operation in ("case.transition", "case.export", "audit.read"):
-            if not db.session.scalar(select(PermissionGrant.id).where(PermissionGrant.user_id == user.id, PermissionGrant.operation == operation, PermissionGrant.bureau_id == user.bureau_id)):
+            if (user.id,operation,user.bureau_id,None) not in permission_keys:
                 db.session.add(PermissionGrant(user_id=user.id, operation=operation, bureau_id=user.bureau_id,
                                                approval_reference="SYNTHETIC-DEMO-ACCESS-V2", reason="Explicit demonstration permission", expires_at=now() + timedelta(days=30)))
     verifier = db.session.scalar(select(User).where(User.email == "verifier@onecase.demo"))
     from .models import ActionEvent
     synthetic_ids = select(ActionEvent.complaint_id).where(ActionEvent.kind == "registered", ActionEvent.reason == "Synthetic demonstration record")
+    granted_cases = set(db.session.scalars(select(Grant.complaint_id).where(Grant.user_id == verifier.id)))
     for case in db.session.scalars(select(Complaint).where(Complaint.id.in_(synthetic_ids))):
-        if not db.session.scalar(select(Grant.id).where(Grant.user_id == verifier.id, Grant.complaint_id == case.id)):
+        if case.id not in granted_cases:
             db.session.add(Grant(user_id=verifier.id, complaint_id=case.id, expires_at=now() + timedelta(days=30), reason="Synthetic independent-verifier assignment"))
         for operation in ("documents.read", "case.transition"):
-            if not db.session.scalar(select(PermissionGrant.id).where(PermissionGrant.user_id == verifier.id, PermissionGrant.complaint_id == case.id, PermissionGrant.operation == operation)):
+            if (verifier.id,operation,None,case.id) not in permission_keys:
                 db.session.add(PermissionGrant(user_id=verifier.id, complaint_id=case.id, operation=operation, approval_reference="SYNTHETIC-VERIFIER-V2", reason="Independent demonstration verification", expires_at=now() + timedelta(days=30)))
 
 

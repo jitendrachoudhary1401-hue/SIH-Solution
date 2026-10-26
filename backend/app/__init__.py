@@ -46,6 +46,7 @@ def create_app(config=None):
         CLAMAV_HOST=os.getenv("CLAMAV_HOST", ""),
         CLAMAV_PORT=int(os.getenv("CLAMAV_PORT", "3310")),
         DOCUMENT_LIMIT_PER_CASE=int(os.getenv("DOCUMENT_LIMIT_PER_CASE", "30")),
+        MAX_UPLOAD_BYTES=int(os.getenv("MAX_UPLOAD_BYTES", str(3 * 1024 * 1024))),
         JOB_LIMIT_PER_HOUR=int(os.getenv("JOB_LIMIT_PER_HOUR", "30")),
         SECURITY_CONTACT=os.getenv("SECURITY_CONTACT", "Local demonstration administrator"),
         STORAGE_BACKEND=os.getenv("STORAGE_BACKEND", "neon" if os.getenv("AWS_ENDPOINT_URL_S3") else "local"),
@@ -57,7 +58,8 @@ def create_app(config=None):
     )
     app.config.update(config or {})
     if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_size": 3, "max_overflow": 2, "pool_timeout": 5, "pool_recycle": 300}
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_size": 3, "max_overflow": 2, "pool_timeout": 5, "pool_recycle": 300,
+                                                    "connect_args": {"connect_timeout": 15, "prepare_threshold": None}}
     if app.config["APP_ENV"] == "production" and (not app.config["COOKIE_SECURE"] or not app.config["SECRET_KEY"] or not app.config["MFA_ENCRYPTION_KEY"]):
         raise RuntimeError("Production requires secure HTTPS cookies, SECRET_KEY and MFA_ENCRYPTION_KEY.")
     Path(app.config["STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)

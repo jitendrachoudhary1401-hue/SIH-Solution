@@ -27,8 +27,14 @@ test('officer creates, acts on, disposes, reopens, and transfers a case', async 
   await expect(dialog).not.toBeVisible();
   await page.getByRole('tab', { name: 'History' }).click();
   await expect(page.getByText('Officer action recorded', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Evidence', exact: true }).click();
+  await page.getByLabel('Upload supporting evidence').setInputFiles('tests/fixtures/synthetic-outcome.png');
+  await page.getByRole('button', { name: 'Upload evidence', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Change status', exact: true }).click();
   await dialog.getByLabel('New status').selectOption('disposed');
+  await dialog.getByLabel('Outcome document', {exact:true}).selectOption({label:'synthetic-outcome.png'});
+  await dialog.getByLabel('Communication record', {exact:true}).fill('Outcome communicated to the synthetic complainant through recorded correspondence.');
   await dialog.getByLabel('Reason', { exact: true }).fill('Refund has been documented and accepted by the complainant.');
   await dialog.getByRole('button', { name: 'Save to case history' }).click();
   await expect(dialog).not.toBeVisible();
@@ -67,8 +73,9 @@ test('responsive workspace and keyboard navigation at mobile, tablet and desktop
     }
     await page.screenshot({ path: `test-results/dashboard-${width}.png`, fullPage: true });
   }
-  await page.getByRole('button', { name: 'Use dark theme' }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByRole('button', {name:'Use dark theme'})).toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await page.locator('body').evaluate(element=>parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16);
   await page.getByRole('link', { name: 'Action logs', exact: true }).click();
   await page.getByRole('button', { name: /Complaint registered/ }).first().click();
   await expect(page.getByText('Original UTC timestamp').first()).toBeVisible();

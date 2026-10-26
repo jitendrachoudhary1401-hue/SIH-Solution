@@ -2,7 +2,7 @@
 import hashlib
 from functools import wraps
 from datetime import timedelta, timezone
-from flask import abort, current_app, g, request
+from flask import abort, current_app, g, request, has_request_context
 from sqlalchemy import and_, or_, select
 from .models import (db, Complaint, Grant, Session, now, RoleAssignment, PermissionGrant,
                      Appointment, Proceeding, CaseConflict)
@@ -22,8 +22,20 @@ def live(model):
 
 def roles(user=None):
     user = user or g.user
+    cache = g.setdefault("_role_cache", {}) if has_request_context() else {}
+    if user.id in cache:
+        return cache[user.id]
     assigned = set(db.session.scalars(select(RoleAssignment.role).where(RoleAssignment.user_id == user.id, live(RoleAssignment))))
-    return ({user.role} | assigned) & ROLES
+    result = ({user.role} | assigned) & ROLES
+    cache[user.id] = result
+    return result
+
+
+def effective_grants(user):
+    cache = g.setdefault("_permission_cache", {}) if has_request_context() else {}
+    if user.id not in cache:
+        cache[user.id] = db.session.scalars(select(PermissionGrant).where(PermissionGrant.user_id == user.id, live(PermissionGrant))).all()
+    return cache[user.id]
 
 
 def authenticated(fn):
@@ -47,9 +59,10 @@ def authenticated(fn):
 
 def permission_scope(operation, user=None):
     user = user or g.user
-    grants = select(PermissionGrant).where(PermissionGrant.user_id == user.id, PermissionGrant.operation == operation, live(PermissionGrant))
     conditions = []
-    for grant in db.session.scalars(grants):
+    for grant in effective_grants(user):
+        if grant.operation != operation:
+            continue
         fields = []
         if grant.complaint_id is not None:
             fields.append(Complaint.id == grant.complaint_id)

@@ -1,7 +1,7 @@
 import io
 from datetime import timedelta
 from sqlalchemy import select, func
-from conftest import login
+from conftest import login, approved_test_evidence
 from app.models import db, now, Assignment, ActionEvent, Complaint, Notification, Session, Job, User
 from app.jobs import monitor
 
@@ -44,12 +44,13 @@ def test_registration_idempotency_validation_and_rollback(client, app):
         assert db.session.scalar(select(Job).where(Job.complaint_id == case["id"]))
 
 
-def test_lifecycle_stale_version_and_reporting(client):
+def test_lifecycle_stale_version_and_reporting(client, app):
     headers = login(client)
     first = client.get("/api/complaints/1").json
     bad = client.post("/api/complaints/1/status", headers=headers, json={"version": first["version"], "status": "received", "reason": "Invalid transition"})
     assert bad.status_code == 422
-    disposed = client.post("/api/complaints/1/status", headers=headers, json={"version": first["version"], "status": "disposed", "reason": "Documented resolution accepted"})
+    document = approved_test_evidence(app)
+    disposed = client.post("/api/complaints/1/status", headers=headers, json={"version": first["version"], "status": "disposed", "reason": "Documented resolution accepted", "outcome_document_id": document, "communication": "Synthetic outcome communicated to the complainant by recorded correspondence"})
     assert disposed.status_code == 200
     stale = client.post("/api/complaints/1/actions", headers=headers, json={"version": first["version"], "reason": "Stale action must fail"})
     assert stale.status_code == 409
@@ -79,7 +80,7 @@ def test_transfer_atomic_ownership_and_access(client, app):
     assert client.post(f"/api/transfers/{response.json['id']}/acknowledge", headers=headers, json={}).status_code == 200
 
 
-def test_attachments_protected_and_validated(client):
+def test_attachments_protected_and_validated(client, app, monkeypatch):
     headers = login(client)
     version = str(client.get("/api/complaints/1").json["version"])
     invalid = client.post("/api/complaints/1/attachments", headers=headers, data={"version": version, "file": (io.BytesIO(b"<script>"), "bad.pdf")})
@@ -87,6 +88,12 @@ def test_attachments_protected_and_validated(client):
     uploaded = client.post("/api/complaints/1/attachments", headers=headers, data={"version": version, "file": (io.BytesIO(b"%PDF-1.4\nSynthetic test evidence"), "evidence.pdf")})
     assert uploaded.status_code == 201
     attachment = client.get("/api/complaints/1").json["attachments"][0]
+    assert client.get(f"/api/attachments/{attachment['id']}/download").status_code == 423
+    from app import documents
+    monkeypatch.setattr(documents, "validate_file", lambda *args: None)
+    monkeypatch.setattr(documents, "scan_file", lambda *args: ("clean", "Injected scanner test double"))
+    with app.app_context():
+        documents.scan_pending()
     assert client.get(f"/api/attachments/{attachment['id']}/download").status_code == 200
     login(client, "lead.pgrc@onecase.demo")
     assert client.get(f"/api/attachments/{attachment['id']}/download").status_code == 404
@@ -102,7 +109,7 @@ def test_monitoring_deduplicates_and_admin_has_no_case_access(client, app):
     assert client.get("/api/complaints").json["total"] == 0
     assert client.get("/api/dashboard/summary").json["total"] == 0
     assert client.get("/api/complaints/1").status_code == 404
-    assert client.get("/api/audit-logs").json["total"] == 0
+    assert all(e["complaint_id"] is None for e in client.get("/api/audit-logs").json["items"])
 
 
 def test_officer_cannot_edit_other_owner_or_transfer(client):
@@ -144,11 +151,12 @@ def test_sla_pause_resume(client):
     assert resumed.status_code == 200 and resumed.json["paused_at"] is None
 
 
-def test_episode_metrics_distinguish_reopened_cycles(client):
+def test_episode_metrics_distinguish_reopened_cycles(client, app):
     headers = login(client)
     case = client.get("/api/complaints/1").json
+    document = approved_test_evidence(app)
     for state in ["disposed", "under_review", "disposed"]:
-        response = client.post("/api/complaints/1/status", headers=headers, json={"version": case["version"], "status": state, "reason": "Documented lifecycle episode test"})
+        response = client.post("/api/complaints/1/status", headers=headers, json={"version": case["version"], "status": state, "reason": "Documented lifecycle episode test", "outcome_document_id": document, "communication": "Synthetic outcome communication recorded with its recipient"})
         assert response.status_code == 200
         case = response.json
     metrics = client.get("/api/reports/metrics?institution=1").json
