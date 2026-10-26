@@ -1,7 +1,8 @@
 """Backend authorization: live role grants, object scope, appointments and conflicts."""
 import hashlib
 from functools import wraps
-from flask import abort, g, request
+from datetime import timedelta, timezone
+from flask import abort, current_app, g, request
 from sqlalchemy import and_, or_, select
 from .models import (db, Complaint, Grant, Session, now, RoleAssignment, PermissionGrant,
                      Appointment, Proceeding, CaseConflict)
@@ -30,13 +31,16 @@ def authenticated(fn):
     def wrapped(*args, **kwargs):
         token = request.cookies.get("onecase_session", "")
         session = db.session.get(Session, digest(token)) if token else None
-        if not session or session.expires_at.replace(tzinfo=now().tzinfo) <= now() or not session.user.active:
+        if not session or session.expires_at.replace(tzinfo=timezone.utc) <= now() or not session.user.active or now() - session.last_seen_at.replace(tzinfo=timezone.utc) > timedelta(minutes=current_app.config["SESSION_IDLE_MINUTES"]):
             abort(401, description="Your session has expired. Please sign in.")
         g.user, g.session = session.user, session
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             import hmac
             if not hmac.compare_digest(request.headers.get("X-CSRF-Token", ""), session.csrf):
                 abort(403, description="Invalid request token. Refresh and try again.")
+        if now() - session.last_seen_at.replace(tzinfo=timezone.utc) > timedelta(minutes=1):
+            session.last_seen_at = now()
+            db.session.commit()
         return fn(*args, **kwargs)
     return wrapped
 

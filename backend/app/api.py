@@ -30,6 +30,12 @@ class Input(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class LoginInput(Input):
+    email: str = Field(min_length=3, max_length=180)
+    password: str = Field(min_length=1, max_length=1024)
+    verification_code: str = Field(default="", max_length=100)
+
+
 class Registration(Input):
     institution_id: int = Field(gt=0)
     owner_id: int = Field(gt=0)
@@ -161,7 +167,7 @@ def event(case, kind, summary, reason="", changes=None, actor=None):
     actor = actor or getattr(g, "user", None)
     item = ActionEvent(complaint_id=case.id if case else None, actor_id=actor.id if actor else None,
                        actor_name=actor.name if actor else "OneCase worker", bureau_id=case.bureau_id if case else None,
-                       kind=kind, summary=summary, reason=reason, changes=changes or {})
+                       kind=kind, summary=summary, reason=reason, changes=changes or {}, request_id=getattr(g, "request_id", ""))
     db.session.add(item)
     return item
 
@@ -227,27 +233,42 @@ def page(query, serializer, model):
 
 @api.post("/auth/login")
 def login():
-    data = body()
-    email = str(data.get("email", "")).strip().lower()[:180]
-    password = str(data.get("password", ""))
+    data = parse(LoginInput)
+    email, password = data.email.lower(), data.password
     key = digest(f"{request.remote_addr}:{email}")
     count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == key, LoginAttempt.at > now() - timedelta(minutes=15)))
     if count >= 10:
         abort(429, description="Too many attempts. Try again in 15 minutes.")
     db.session.add(LoginAttempt(key=key))
+    ip_key = digest("ip:" + str(request.remote_addr))
+    ip_count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == ip_key, LoginAttempt.at > now() - timedelta(minutes=15)))
+    account_key = digest("account:" + email)
+    account_count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == account_key, LoginAttempt.at > now() - timedelta(minutes=15)))
+    if ip_count >= 50 or account_count >= 15:
+        abort(429, description="Too many attempts. Try again in 15 minutes.")
+    db.session.add_all([LoginAttempt(key=ip_key), LoginAttempt(key=account_key)])
     db.session.commit()
-    user = db.session.scalar(select(User).where(User.email == email, User.active.is_(True)))
+    user = db.session.scalar(select(User).where(User.email == email, User.active.is_(True)).with_for_update())
     try:
-        valid = hasher.verify(user.password_hash if user else DUMMY_HASH, password[:1024])
+        valid = hasher.verify(user.password_hash if user else DUMMY_HASH, password)
     except (VerificationError, InvalidHashError):
         valid = False
     if not user or not valid:
+        item = event(None, "authentication_failed", "Officer authentication failed")
+        item.actor_name, item.outcome, item.severity = "Unauthenticated request", "denied", "warning"
+        db.session.commit()
         abort(401, description="Email or password is incorrect.")
+    from .security import verify_mfa
+    if user.mfa_enabled and not verify_mfa(user, data.verification_code):
+        return {"error": {"message": "Enter a valid authenticator or one-time recovery code.", "status": 403, "mfa_required": True}}, 403
+    if current_app.config["APP_ENV"] == "production" and roles(user) & {"lead", "reviewer", "committee", "verifier", "admin"} and not user.mfa_enabled:
+        abort(403, description="Privileged production access requires MFA enrollment through the approved administrator process.")
     old = request.cookies.get("onecase_session")
     if old and (old_session := db.session.get(Session, digest(old))):
         db.session.delete(old_session)
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
     db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
+    event(None, "authenticated", "Officer sign-in completed", actor=user)
     db.session.commit()
     response = make_response({"user": user_json(user), "csrf": csrf})
     response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
@@ -265,7 +286,7 @@ def me():
 def refresh():
     db.session.delete(g.session)
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
-    db.session.add(Session(id=digest(token), user_id=g.user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
+    db.session.add(Session(id=digest(token), user_id=g.user.id, csrf=csrf, expires_at=g.session.expires_at, authenticated_at=g.session.authenticated_at))
     db.session.commit()
     response = make_response({"user": user_json(g.user), "csrf": csrf})
     response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
@@ -392,7 +413,7 @@ def register_case():
 def detail(case_id):
     case = case_or_404(case_id)
     result = case_json(case, True)
-    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
+    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id, "scan_state": a.scan_state, "scan_detail": a.scan_detail} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
     result["transfers"] = [{"id": t.id, "to_owner_id": t.to_owner_id, "created_at": iso(t.created_at), "acknowledged_at": iso(t.acknowledged_at)} for t in db.session.scalars(select(Transfer).where(Transfer.complaint_id == case.id).order_by(Transfer.id.desc()))]
     result["pauses"] = [{"id": p.id, "started_at": iso(p.started_at), "ended_at": iso(p.ended_at), "reason": p.reason} for p in db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id).order_by(SLAPause.id))]
     return result
@@ -593,6 +614,9 @@ def upload(case_id):
     content = item.read()
     if not content or len(content) > 8 * 1024 * 1024:
         abort(422, description="Evidence must be between 1 byte and 8 MB.")
+    count = db.session.scalar(select(func.count()).select_from(Attachment).where(Attachment.complaint_id == case.id))
+    if count >= current_app.config["DOCUMENT_LIMIT_PER_CASE"]:
+        abort(429, description="This case has reached its evidence file limit.")
     media = "application/pdf" if content.startswith(b"%PDF-") else "image/png" if content.startswith(b"\x89PNG\r\n\x1a\n") else "image/jpeg" if content.startswith(b"\xff\xd8\xff") else None
     name = secure_filename(item.filename or "evidence")[:180]
     ext = Path(name).suffix.lower()
@@ -624,9 +648,13 @@ def download(attachment_id):
     case = case_or_404(attachment.complaint_id)
     if not document_allowed(case, attachment):
         abort(404, description="Document unavailable in your field scope.")
+    if attachment.scan_state != "clean":
+        abort(423, description="Evidence is quarantined pending validation and malware checks.")
     path = Path(current_app.config["STORAGE_PATH"]) / attachment.key
     if not path.is_file():
         abort(404, description="Evidence file unavailable.")
+    event(case, "evidence_downloaded", "Authorized evidence download", changes={"attachment_id": attachment.id})
+    db.session.commit()
     return send_file(path, as_attachment=True, download_name=attachment.filename, mimetype=attachment.media_type)
 
 
