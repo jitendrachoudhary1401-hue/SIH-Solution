@@ -36,9 +36,11 @@ def create_app(config=None):
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         STORAGE_PATH=str(runtime / "documents"),
         COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+        SECRET_KEY=os.getenv("SECRET_KEY", "onecase-production-secret-key-32-bytes-secure"),
         MODEL_PATH=os.getenv("MODEL_PATH", str(root / ".runtime" / "models")),
         FRONTEND_PATH=str(root / "frontend" / "dist"),
     )
+
     app.config.update(config or {})
     if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {}

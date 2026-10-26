@@ -264,3 +264,33 @@ class AccountRequest(db.Model):
         CheckConstraint("status IN ('pending', 'approved', 'rejected')"),
         CheckConstraint("request_type IN ('student', 'college_rep', 'officer')"),
     )
+
+
+class OTPChallenge(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    email = db.Column(db.String(180), nullable=False, index=True)
+    otp_verifier = db.Column(db.String(128), nullable=False)
+    salt = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    max_attempts = db.Column(db.Integer, nullable=False, default=3)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
+    consumed_at = db.Column(db.DateTime(timezone=True))
+    ip_address = db.Column(db.String(45))
+
+    user = db.relationship(User)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'consumed', 'invalidated', 'expired')"),
+    )
+
+
+class AccountLockout(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(180), unique=True, nullable=False, index=True)
+    failed_attempts = db.Column(db.Integer, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime(timezone=True))
+    last_attempt_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+

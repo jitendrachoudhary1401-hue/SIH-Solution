@@ -70,11 +70,15 @@ def setup_test_data(password="TestPassword!2026"):
 
 @pytest.fixture
 def app(tmp_path):
+    from app.email_service import set_mock_smtp_delivery, clear_test_sent_emails
+    set_mock_smtp_delivery(True)
+    clear_test_sent_emails()
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents")})
     with app.app_context():
         db.create_all()
         setup_test_data("TestPassword!2026")
     yield app
+    clear_test_sent_emails()
 
 
 @pytest.fixture
@@ -82,7 +86,16 @@ def client(app):
     return app.test_client()
 
 
-def login(client, email="lead.rb@onecase.demo"):
-    response = client.post("/api/auth/login", json={"email": email, "password": "TestPassword!2026"})
-    assert response.status_code == 200
+def login(client, email="lead.rb@onecase.demo", password="TestPassword!2026"):
+    from app.email_service import get_last_sent_otp
+    response = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.json
+    if response.json.get("otp_required"):
+        challenge_id = response.json["challenge_id"]
+        otp = get_last_sent_otp(email)
+        assert otp is not None, f"No OTP was delivered to {email}"
+        verify_res = client.post("/api/auth/otp/verify", json={"challenge_id": challenge_id, "otp": otp})
+        assert verify_res.status_code == 200, verify_res.json
+        return {"X-CSRF-Token": verify_res.json["csrf"]}
     return {"X-CSRF-Token": response.json["csrf"]}
+

@@ -928,6 +928,89 @@ tbody tr:hover { background: var(--hover); }
 .login .error { background: #3b1117; color: #fca5a5; border-color: #7f1d1d; font-size: 12px; margin: 0; }
 .login .notice { margin-top: 16px; background: #0e284a; border-color: #1e4578; color: #7dd3fc; font-size: 12px; }
 
+/* OTP Verification Screen Styles */
+.otp-code-input {
+  font-family: 'Courier New', Courier, monospace !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  letter-spacing: 10px !important;
+  text-align: center !important;
+  padding: 12px 16px !important;
+  background: #071326 !important;
+  border: 1px solid #1e4578 !important;
+  color: #38bdf8 !important;
+  border-radius: 8px !important;
+  outline: none !important;
+}
+.otp-code-input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25) !important;
+}
+.otp-timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0e284a;
+  border: 1px solid #1e4578;
+  color: #7dd3fc;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-top: 16px;
+}
+.otp-timer-badge.warning {
+  background: #3b1117;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+.otp-expired-text {
+  font-weight: 600;
+  color: #fca5a5;
+}
+.otp-success-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #064e3b;
+  border: 1px solid #059669;
+  color: #a7f3d0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-top: 14px;
+}
+.otp-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 12px;
+}
+.otp-resend-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.login-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+.login-back-link:hover {
+  color: #f1f5f9;
+}
+
+
 @keyframes rotate { to { transform: rotate(360deg); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dot-drift { to { background-position: 26px 52px; } }

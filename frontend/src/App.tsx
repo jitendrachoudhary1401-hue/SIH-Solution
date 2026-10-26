@@ -49,11 +49,72 @@ function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: s
   const [show, setShow] = useState(false);
   const [regMode, setRegMode] = useState<'none' | 'student' | 'college_rep' | 'officer'>('none');
   const [successReq, setSuccessReq] = useState<{ id: number; email: string; type: string; message: string } | null>(null);
+  const [otpChallenge, setOtpChallenge] = useState<{ id: string; email: string; expiresIn: number } | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpRemaining, setOtpRemaining] = useState(300);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendSuccess, setResendSuccess] = useState('');
   const navigate = useNavigate();
 
+  // Expiration countdown
+  useEffect(() => {
+    if (!otpChallenge || otpRemaining <= 0) return;
+    const timer = setInterval(() => setOtpRemaining(prev => Math.max(0, prev - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [otpChallenge, otpRemaining]);
+
+  // Resend cooldown countdown
+  useEffect(() => {
+    if (!otpChallenge || resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown(prev => Math.max(0, prev - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [otpChallenge, resendCooldown]);
+
   const loginMutation = useMutation({
-    mutationFn: (data: { email: string; password: string }) => post<{ user: User; csrf: string }>('/auth/login', data),
-    onSuccess: data => { onSuccess(data); navigate('/dashboard'); }
+    mutationFn: (data: { email: string; password: string }) =>
+      post<{ otp_required?: boolean; challenge_id?: string; email?: string; expires_in?: number; user?: User; csrf?: string }>('/auth/login', data),
+    onSuccess: data => {
+      if (data.otp_required && data.challenge_id) {
+        setOtpChallenge({
+          id: data.challenge_id,
+          email: data.email || '',
+          expiresIn: data.expires_in || 300
+        });
+        setOtpCode('');
+        setOtpRemaining(data.expires_in || 300);
+        setResendCooldown(60);
+        setResendSuccess('');
+      } else if (data.user && data.csrf) {
+        onSuccess({ user: data.user, csrf: data.csrf });
+        navigate('/dashboard');
+      }
+    }
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: (data: { challenge_id: string; otp: string }) =>
+      post<{ user: User; csrf: string }>('/auth/otp/verify', data),
+    onSuccess: data => {
+      onSuccess(data);
+      navigate('/dashboard');
+    }
+  });
+
+  const resendOtpMutation = useMutation({
+    mutationFn: (data: { challenge_id: string }) =>
+      post<{ ok: boolean; challenge_id: string; email: string; expires_in: number; message: string }>('/auth/otp/resend', data),
+    onSuccess: data => {
+      setOtpChallenge({
+        id: data.challenge_id,
+        email: data.email,
+        expiresIn: data.expires_in
+      });
+      setOtpCode('');
+      setOtpRemaining(data.expires_in || 300);
+      setResendCooldown(60);
+      setResendSuccess(data.message || 'A new verification code has been sent.');
+      verifyOtpMutation.reset();
+    }
   });
 
   const regMutation = useMutation({
@@ -75,6 +136,12 @@ function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: s
     loginMutation.mutate({ email: String(form.get('email')), password: String(form.get('password')) });
   }
 
+  function submitOtpVerify(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!otpChallenge || otpCode.length !== 6) return;
+    verifyOtpMutation.mutate({ challenge_id: otpChallenge.id, otp: otpCode });
+  }
+
   function submitRegistration(e: FormEvent<HTMLFormElement>, endpoint: string) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -90,7 +157,114 @@ function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: s
       </div>
 
       <main className="login-card">
-        {successReq ? (
+        {otpChallenge ? (
+          <div>
+            <div className="login-icon"><ShieldCheck size={26} /></div>
+            <p className="eyebrow">TWO-STEP AUTHENTICATION</p>
+            <h1>Enter verification code</h1>
+            <p>
+              A 6-digit verification code was sent to <strong>{otpChallenge.email}</strong>.
+            </p>
+
+            <div className={`otp-timer-badge ${otpRemaining <= 60 ? 'warning' : ''}`}>
+              <Clock3 size={15} />
+              <span>
+                {otpRemaining > 0 ? (
+                  <>Code expires in <strong>{Math.floor(otpRemaining / 60)}:{String(otpRemaining % 60).padStart(2, '0')}</strong></>
+                ) : (
+                  <span className="otp-expired-text">Verification code expired. Request a new code.</span>
+                )}
+              </span>
+            </div>
+
+            {resendSuccess && (
+              <div className="otp-success-alert" role="status">
+                <Check size={16} />
+                <span>{resendSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={submitOtpVerify}>
+              <Field title="Verification Code (6 Digits)" hint="Check your inbox or spam folder for your OneCase verification email">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="000000"
+                  className="otp-code-input"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  autoFocus
+                  required
+                  disabled={verifyOtpMutation.isPending || otpRemaining <= 0}
+                />
+              </Field>
+
+              <FormError mutation={verifyOtpMutation} />
+              <FormError mutation={resendOtpMutation} />
+
+              <button
+                type="submit"
+                className="button primary full"
+                disabled={otpCode.length !== 6 || verifyOtpMutation.isPending || otpRemaining <= 0}
+              >
+                {verifyOtpMutation.isPending ? (
+                  <>
+                    <RefreshCw className="spin" size={17} />
+                    <span>Verifying code…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify OTP & Sign In</span>
+                    <ArrowRight size={17} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="otp-actions-row">
+              <button
+                type="button"
+                className="button secondary small otp-resend-btn"
+                disabled={resendCooldown > 0 || resendOtpMutation.isPending}
+                onClick={() => {
+                  setResendSuccess('');
+                  resendOtpMutation.mutate({ challenge_id: otpChallenge.id });
+                }}
+              >
+                {resendOtpMutation.isPending ? (
+                  <><RefreshCw className="spin" size={14} /> Sending…</>
+                ) : resendCooldown > 0 ? (
+                  <>Resend code ({resendCooldown}s)</>
+                ) : (
+                  <>Resend OTP code</>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="login-back-link"
+                onClick={() => {
+                  setOtpChallenge(null);
+                  setOtpCode('');
+                  loginMutation.reset();
+                  verifyOtpMutation.reset();
+                  resendOtpMutation.reset();
+                }}
+              >
+                <ArrowLeft size={14} />
+                <span>Back to sign in</span>
+              </button>
+            </div>
+
+            <div className="login-foot">
+              <ShieldCheck size={15} /> Encrypted STARTTLS email verification
+            </div>
+          </div>
+        ) : successReq ? (
+
           <div className="login-success-box">
             <div className="login-success-icon"><ShieldCheck size={28} /></div>
             <h2 className="login-success-title">Request Submitted</h2>

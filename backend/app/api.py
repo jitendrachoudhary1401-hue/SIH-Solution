@@ -10,12 +10,15 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from flask import Blueprint, abort, current_app, g, jsonify, make_response, request, send_file
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from werkzeug.utils import secure_filename
 from .auth import authenticated, case_or_404, check_version, digest, scope
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
-                     Pair, Review, Idempotency, MatchingRun, SLAPause, AccountRequest)
+                     Pair, Review, Idempotency, MatchingRun, SLAPause, AccountRequest,
+                     OTPChallenge, AccountLockout)
+from .email_service import (generate_otp, compute_otp_verifier, verify_otp_verifier,
+                            mask_email, send_otp_email, get_smtp_config)
 
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
@@ -147,6 +150,15 @@ class OfficerAccountRequestInput(Input):
 class AccountRequestReview(Input):
     decision: str = Field(pattern="^(approved|rejected)$")
     reason: str = Field(default="", max_length=2000)
+
+
+class OTPVerifyInput(Input):
+    challenge_id: str = Field(min_length=10, max_length=64)
+    otp: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class OTPResendInput(Input):
+    challenge_id: str = Field(min_length=10, max_length=64)
 
 
 def parse(schema):
@@ -300,18 +312,48 @@ def login():
     data = body()
     email = str(data.get("email", "")).strip().lower()[:180]
     password = str(data.get("password", ""))
+
+    # IP rate limit: 10 attempts in 15 minutes per IP:email
     key = digest(f"{request.remote_addr}:{email}")
     count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == key, LoginAttempt.at > now() - timedelta(minutes=15)))
     if count >= 10:
         abort(429, description="Too many attempts. Try again in 15 minutes.")
     db.session.add(LoginAttempt(key=key))
     db.session.commit()
+
+    # Enforce 3-failed-password-attempts 60-second temporary lockout
+    lockout = db.session.scalar(select(AccountLockout).where(AccountLockout.email == email).with_for_update())
+    if lockout and lockout.locked_until:
+        locked_time = lockout.locked_until.replace(tzinfo=timezone.utc) if lockout.locked_until.tzinfo is None else lockout.locked_until
+        if locked_time > now():
+            remaining = int((locked_time - now()).total_seconds())
+            remaining = max(1, remaining)
+            abort(429, description=f"Account temporarily locked due to 3 consecutive failed password attempts. Try again in {remaining} seconds.")
+        else:
+            lockout.failed_attempts = 0
+            lockout.locked_until = None
+            db.session.commit()
+
     user = db.session.scalar(select(User).where(User.email == email, User.active.is_(True)))
     try:
         valid = hasher.verify(user.password_hash if user else DUMMY_HASH, password[:1024])
     except (VerificationError, InvalidHashError):
         valid = False
+
     if not user or not valid:
+        # Record failed attempt in AccountLockout for existing accounts
+        if user:
+            if not lockout:
+                lockout = AccountLockout(email=email, failed_attempts=1, last_attempt_at=now())
+                db.session.add(lockout)
+            else:
+                lockout.failed_attempts += 1
+                lockout.last_attempt_at = now()
+            if lockout.failed_attempts >= 3:
+                lockout.locked_until = now() + timedelta(seconds=60)
+            db.session.commit()
+
+        # Check pending/rejected account requests
         pending_req = db.session.scalar(select(AccountRequest).where(AccountRequest.email == email).order_by(AccountRequest.created_at.desc()))
         if pending_req:
             try:
@@ -324,16 +366,233 @@ def login():
                 elif pending_req.status == "rejected":
                     reason_msg = f" Reason: {pending_req.reviewer_decision_reason}" if pending_req.reviewer_decision_reason else ""
                     abort(403, description=f"Your account request was reviewed and rejected.{reason_msg}")
+
+        if lockout and lockout.locked_until:
+            locked_time = lockout.locked_until.replace(tzinfo=timezone.utc) if lockout.locked_until.tzinfo is None else lockout.locked_until
+            if locked_time > now():
+                abort(429, description="Too many failed password attempts. Account locked for 60 seconds.")
         abort(401, description="Email or password is incorrect.")
+
+
+    # Password is correct: clear failed attempts
+    if lockout:
+        lockout.failed_attempts = 0
+        lockout.locked_until = None
+        lockout.last_attempt_at = now()
+
+    # Invalidate prior pending challenges for this user
+    prior_challenges = db.session.scalars(
+        select(OTPChallenge).where(OTPChallenge.user_id == user.id, OTPChallenge.status == "pending")
+    ).all()
+    for ch in prior_challenges:
+        ch.status = "invalidated"
+
+    # Rate limiting on OTP generation (maximum 5 OTP emails per 15 minutes)
+    recent_otp_count = db.session.scalar(
+        select(func.count()).select_from(OTPChallenge).where(
+            OTPChallenge.user_id == user.id,
+            OTPChallenge.created_at > now() - timedelta(minutes=15)
+        )
+    )
+    if recent_otp_count >= 5:
+        abort(429, description="Too many verification requests. Please wait 15 minutes before trying again.")
+
+    # Generate 6-digit cryptographic OTP and create challenge
+    cfg = get_smtp_config()
+    otp = generate_otp()
+    salt = secrets.token_hex(16)
+    secret_key = current_app.config.get("SECRET_KEY", "onecase-default-secret-key-32b")
+    verifier = compute_otp_verifier(secret_key, salt, otp)
+    expiry_minutes = cfg["expiry_minutes"]
+    challenge = OTPChallenge(
+        id=secrets.token_urlsafe(32),
+        user_id=user.id,
+        email=user.email,
+        otp_verifier=verifier,
+        salt=salt,
+        expires_at=now() + timedelta(minutes=expiry_minutes),
+        attempts=0,
+        max_attempts=cfg["max_attempts"],
+        status="pending",
+        created_at=now(),
+        ip_address=request.remote_addr
+    )
+    db.session.add(challenge)
+    db.session.flush()
+
+    # Deliver OTP email via Gmail SMTP
+    success, err_msg = send_otp_email(user.email, otp, expiry_minutes=expiry_minutes)
+    if not success:
+        db.session.rollback()
+        abort(503, description=err_msg or "Failed to deliver verification code. Please check configuration.")
+
+    db.session.commit()
+    # Critical: Do NOT create a session or set a session cookie here.
+    return jsonify({
+        "otp_required": True,
+        "challenge_id": challenge.id,
+        "email": mask_email(user.email),
+        "expires_in": expiry_minutes * 60,
+        "message": f"Verification code sent to {mask_email(user.email)}."
+    })
+
+
+@api.post("/auth/otp/verify")
+def verify_otp_endpoint():
+    data = parse(OTPVerifyInput)
+    challenge_id = data.challenge_id.strip()
+    otp = data.otp.strip()
+
+    # Concurrency control with row lock
+    challenge = db.session.scalar(
+        select(OTPChallenge).where(OTPChallenge.id == challenge_id).with_for_update()
+    )
+    if not challenge:
+        abort(404, description="Invalid or expired verification session. Please sign in again.")
+
+    if challenge.status == "consumed":
+        abort(400, description="This verification code has already been used.")
+
+    if challenge.status != "pending":
+        abort(400, description="This verification code is no longer valid. Please sign in again.")
+
+    exp = challenge.expires_at.replace(tzinfo=timezone.utc) if challenge.expires_at.tzinfo is None else challenge.expires_at
+    if exp <= now():
+        challenge.status = "expired"
+        db.session.commit()
+        abort(400, description="Verification code has expired. Please request a new code.")
+
+    if challenge.attempts >= challenge.max_attempts:
+        challenge.status = "invalidated"
+        db.session.commit()
+        abort(429, description="Too many incorrect attempts. This code has been invalidated. Please sign in again.")
+
+    secret_key = current_app.config.get("SECRET_KEY", "onecase-default-secret-key-32b")
+    is_valid = verify_otp_verifier(secret_key, challenge.salt, otp, challenge.otp_verifier)
+
+    if not is_valid:
+        challenge.attempts += 1
+        remaining = max(0, challenge.max_attempts - challenge.attempts)
+        if challenge.attempts >= challenge.max_attempts:
+            challenge.status = "invalidated"
+            db.session.commit()
+            abort(429, description="Too many incorrect attempts. This code has been invalidated. Please sign in again.")
+        db.session.commit()
+        abort(401, description=f"Invalid verification code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.")
+
+    # OTP is valid: Atomically consume challenge to prevent race conditions
+    affected = db.session.execute(
+        update(OTPChallenge)
+        .where(
+            OTPChallenge.id == challenge_id,
+            OTPChallenge.status == "pending"
+        )
+        .values(
+            status="consumed",
+            consumed_at=now()
+        )
+    ).rowcount
+
+    if affected == 0:
+        db.session.rollback()
+        abort(400, description="This verification code has already been used.")
+
+    user = challenge.user
+    if not user or not user.active:
+        db.session.commit()
+        abort(403, description="This account is inactive or disabled.")
+
+    # Rotate / delete old session
     old = request.cookies.get("onecase_session")
     if old and (old_session := db.session.get(Session, digest(old))):
         db.session.delete(old_session)
+
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
     db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
     db.session.commit()
+
     response = make_response({"user": user_json(user), "csrf": csrf})
-    response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
+    response.set_cookie(
+        "onecase_session", token,
+        httponly=True,
+        secure=current_app.config["COOKIE_SECURE"],
+        samesite="Strict",
+        max_age=28800
+    )
     return response
+
+
+@api.post("/auth/otp/resend")
+def resend_otp_endpoint():
+    data = parse(OTPResendInput)
+    challenge_id = data.challenge_id.strip()
+
+    challenge = db.session.scalar(
+        select(OTPChallenge).where(OTPChallenge.id == challenge_id).with_for_update()
+    )
+    if not challenge:
+        abort(404, description="Verification session not found. Please sign in again.")
+
+    if challenge.status == "consumed":
+        abort(400, description="This verification session has already been completed.")
+
+    cfg = get_smtp_config()
+    cooldown = cfg["resend_cooldown"]
+
+    created = challenge.created_at.replace(tzinfo=timezone.utc) if challenge.created_at.tzinfo is None else challenge.created_at
+    elapsed = (now() - created).total_seconds()
+    if elapsed < cooldown:
+        wait_seconds = max(1, int(cooldown - elapsed))
+        abort(429, description=f"Please wait {wait_seconds} seconds before requesting a new code.")
+
+    recent_count = db.session.scalar(
+        select(func.count()).select_from(OTPChallenge).where(
+            OTPChallenge.user_id == challenge.user_id,
+            OTPChallenge.created_at > now() - timedelta(minutes=15)
+        )
+    )
+    if recent_count >= 5:
+        abort(429, description="Too many verification requests. Please wait 15 minutes before trying again.")
+
+    # Invalidate previous challenge
+    challenge.status = "invalidated"
+
+    otp = generate_otp()
+    salt = secrets.token_hex(16)
+    secret_key = current_app.config.get("SECRET_KEY", "onecase-default-secret-key-32b")
+    verifier = compute_otp_verifier(secret_key, salt, otp)
+    expiry_minutes = cfg["expiry_minutes"]
+
+    new_challenge = OTPChallenge(
+        id=secrets.token_urlsafe(32),
+        user_id=challenge.user_id,
+        email=challenge.email,
+        otp_verifier=verifier,
+        salt=salt,
+        expires_at=now() + timedelta(minutes=expiry_minutes),
+        attempts=0,
+        max_attempts=cfg["max_attempts"],
+        status="pending",
+        created_at=now(),
+        ip_address=request.remote_addr
+    )
+    db.session.add(new_challenge)
+    db.session.flush()
+
+    success, err_msg = send_otp_email(challenge.email, otp, expiry_minutes=expiry_minutes)
+    if not success:
+        db.session.rollback()
+        abort(503, description=err_msg or "Failed to deliver verification code. Please check configuration.")
+
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "challenge_id": new_challenge.id,
+        "email": mask_email(challenge.email),
+        "expires_in": expiry_minutes * 60,
+        "message": f"A new verification code has been sent to {mask_email(challenge.email)}."
+    })
+
 
 
 @api.get("/auth/me")
