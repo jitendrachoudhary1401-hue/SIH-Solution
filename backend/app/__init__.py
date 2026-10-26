@@ -41,6 +41,16 @@ def create_app(config=None):
     app.register_blueprint(api, url_prefix="/api")
     register(app)
 
+    @app.before_request
+    def same_origin_writes():
+        from flask import request, abort
+        if request.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("Origin")
+            if origin and origin.rstrip("/") != request.host_url.rstrip("/"):
+                abort(403, description="Cross-origin write requests are not permitted.")
+            if request.headers.get("Sec-Fetch-Site") == "cross-site":
+                abort(403, description="Cross-site write requests are not permitted.")
+
     @app.errorhandler(HTTPException)
     def http_error(error):
         db.session.rollback()

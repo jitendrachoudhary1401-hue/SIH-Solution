@@ -7,7 +7,7 @@ def monitor():
     from .api import notify, event
     active = db.session.scalars(select(Complaint).where(Complaint.status != "disposed")).all()
     for case in active:
-        if case.due_at:
+        if case.due_at and not case.paused_at:
             due = case.due_at.replace(tzinfo=timezone.utc)
             stage = "overdue" if due < now() else "due_soon" if due <= now() + timedelta(days=2) else None
             if stage:
