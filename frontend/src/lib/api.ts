@@ -1,4 +1,12 @@
 export type User = { id: number; name: string; email: string; role: string; bureau_id: number | null; bureau: string };
+export type AccountRequest = {
+  id: number; request_type: 'student' | 'college_rep' | 'officer'; name: string; email: string;
+  college_name: string | null; institution_id: number | null; institution_name: string | null;
+  roll_number: string | null; department: string | null; academic_year: string | null;
+  employee_id: string | null; designation: string | null; bureau_code: string | null; reason: string | null;
+  status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null;
+  reviewer_id: number | null; reviewer_name: string | null; reviewer_decision_reason: string | null; user_id: number | null;
+};
 export type Institution = { id: number; name: string; external_id: string | null; verified: boolean; region: string; address: string };
 export type Case = {
   id: number; reference: string; institution: Institution; category: string; description?: string;

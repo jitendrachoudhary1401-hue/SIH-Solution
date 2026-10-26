@@ -2,9 +2,9 @@ import { createContext, useContext, useEffect, useRef, useState, type FormEvent,
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Building2, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileCheck2, FileText, FolderOpen, LayoutDashboard, Link2, LogOut, Menu, Moon, Plus, Search, ShieldCheck, Sun, Upload, X, Eye, EyeOff, AlertCircle, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Building2, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileCheck2, FileText, FolderOpen, LayoutDashboard, Link2, LogOut, Menu, Moon, Plus, Search, ShieldCheck, Sun, Upload, X, Eye, EyeOff, AlertCircle, RefreshCw, SlidersHorizontal, GraduationCap, Briefcase, UserCheck } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { api, post, setCsrf, date, label, ApiError, type Case, type Directory, type Event, type Institution, type Page, type Pair, type Summary, type User } from './lib/api';
+import { api, post, setCsrf, date, label, ApiError, type Case, type Directory, type Event, type Institution, type Page, type Pair, type Summary, type User, type AccountRequest } from './lib/api';
 
 const Auth = createContext<{ user: User; logout: () => void }>(null!);
 const Toast = createContext<(message: string) => void>(() => {});
@@ -42,14 +42,286 @@ export default function App() {
   const logout = async () => { await post('/auth/logout', {}); setCsrf(''); client.clear(); window.location.assign('/officer/login'); };
   if (identity.isPending) return <Loading />;
   if (!identity.data) return <Login expired={expired} onSuccess={data => { setCsrf(data.csrf); client.clear(); client.setQueryData(['identity'], data); }} />;
-  return <Auth.Provider value={{ user: identity.data.user, logout }}><Toast.Provider value={setMessage}><Routes><Route element={<Shell />}><Route path="/dashboard" element={<Dashboard />} /><Route path="/complaints" element={<Complaints />} /><Route path="/complaints/:id" element={<CaseDetail />} /><Route path="/institutions" element={<Institutions />} /><Route path="/institutions/:id" element={<InstitutionDetail />} /><Route path="/overlaps" element={<Overlaps />} /><Route path="/overlaps/:id" element={<OverlapDetail />} /><Route path="/alerts" element={<Alerts />} /><Route path="/audit-logs" element={<Audit />} /><Route path="/reports" element={<Reports />} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Route></Routes>{message && <div className="toast" role="status"><CheckCheck size={18} />{message}<button aria-label="Dismiss notification" className="icon-button" onClick={() => setMessage('')}><X size={16} /></button></div>}</Toast.Provider></Auth.Provider>;
+  return <Auth.Provider value={{ user: identity.data.user, logout }}><Toast.Provider value={setMessage}><Routes><Route element={<Shell />}><Route path="/dashboard" element={<Dashboard />} /><Route path="/complaints" element={<Complaints />} /><Route path="/complaints/:id" element={<CaseDetail />} /><Route path="/institutions" element={<Institutions />} /><Route path="/institutions/:id" element={<InstitutionDetail />} /><Route path="/overlaps" element={<Overlaps />} /><Route path="/overlaps/:id" element={<OverlapDetail />} /><Route path="/alerts" element={<Alerts />} /><Route path="/audit-logs" element={<Audit />} /><Route path="/reports" element={<Reports />} /><Route path="/account-requests" element={<AccountRequestsManager />} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Route></Routes>{message && <div className="toast" role="status"><CheckCheck size={18} />{message}<button aria-label="Dismiss notification" className="icon-button" onClick={() => setMessage('')}><X size={16} /></button></div>}</Toast.Provider></Auth.Provider>;
 }
 
 function Login({ onSuccess, expired }: { onSuccess: (data: { user: User; csrf: string }) => void; expired: boolean }) {
-  const [show, setShow] = useState(false); const navigate = useNavigate();
-  const mutation = useMutation({ mutationFn: (data: { email: string; password: string }) => post<{ user: User; csrf: string }>('/auth/login', data), onSuccess: data => { onSuccess(data); navigate('/dashboard'); } });
-  function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = new FormData(e.currentTarget); mutation.mutate({ email: String(form.get('email')), password: String(form.get('password')) }); }
-  return <div className="login"><div className="dot-field" aria-hidden="true" /><div className="login-brand-wrapper"><img src="/logo.png" alt="OneCase — AICTE Intelligent Institution Complaint Coordination & Tracking System" className="login-logo-img" /></div><main className="login-card"><div className="login-icon"><ShieldCheck size={26} /></div><p className="eyebrow">OFFICER WORKSPACE</p><h1>Officer sign in</h1><p>Access your authorized bureau workspace and case records.</p>{(expired || location.search.includes('expired')) && <div className="notice">Your session expired. Sign in to continue.</div>}<form onSubmit={submit}><Field title="Email address"><input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required /></Field><Field title="Password"><div className="password-input"><input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required /><button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field><FormError mutation={mutation} /><button className="button primary full" disabled={mutation.isPending}>{mutation.isPending ? 'Signing in…' : 'Sign in to workspace'}<ArrowRight size={17} /></button></form><div className="login-foot"><ShieldCheck size={15} /> Access for provisioned bureau officers only</div></main><p className="login-bottom">AICTE Intelligent Institution Complaint Coordination & Tracking System</p><div className="login-status-notice"><ShieldCheck size={15} /><span>Authorized Officer Portal · Accounts must be provisioned through administrative workflow</span></div></div>;
+  const [show, setShow] = useState(false);
+  const [regMode, setRegMode] = useState<'none' | 'student' | 'college_rep' | 'officer'>('none');
+  const [successReq, setSuccessReq] = useState<{ id: number; email: string; type: string; message: string } | null>(null);
+  const navigate = useNavigate();
+
+  const loginMutation = useMutation({
+    mutationFn: (data: { email: string; password: string }) => post<{ user: User; csrf: string }>('/auth/login', data),
+    onSuccess: data => { onSuccess(data); navigate('/dashboard'); }
+  });
+
+  const regMutation = useMutation({
+    mutationFn: ({ endpoint, payload }: { endpoint: string; payload: Record<string, unknown> }) =>
+      post<{ ok: boolean; id: number; status: string; message: string }>(endpoint, payload),
+    onSuccess: (data, vars) => {
+      setSuccessReq({
+        id: data.id,
+        email: String(vars.payload.email),
+        type: vars.endpoint.includes('student') ? 'Student Registration' : vars.endpoint.includes('college-rep') ? 'College Representative (ASOP)' : 'AICTE Officer Account',
+        message: data.message
+      });
+    }
+  });
+
+  function submitLogin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    loginMutation.mutate({ email: String(form.get('email')), password: String(form.get('password')) });
+  }
+
+  function submitRegistration(e: FormEvent<HTMLFormElement>, endpoint: string) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const payload = Object.fromEntries(form.entries());
+    regMutation.mutate({ endpoint, payload });
+  }
+
+  return (
+    <div className="login">
+      <div className="dot-field" aria-hidden="true" />
+      <div className="login-brand-wrapper">
+        <img src="/logo.png" alt="OneCase — AICTE Intelligent Institution Complaint Coordination & Tracking System" className="login-logo-img" />
+      </div>
+
+      <main className="login-card">
+        {successReq ? (
+          <div className="login-success-box">
+            <div className="login-success-icon"><ShieldCheck size={28} /></div>
+            <h2 className="login-success-title">Request Submitted</h2>
+            <p className="login-success-desc">
+              Your request has been securely persisted in the database and is currently <strong>pending administrative verification</strong>.
+            </p>
+            <div className="login-success-details">
+              <div><span className="label">Request ID:</span><span className="val">#{successReq.id}</span></div>
+              <div><span className="label">Account Type:</span><span className="val">{successReq.type}</span></div>
+              <div><span className="label">Registered Email:</span><span className="val">{successReq.email}</span></div>
+              <div><span className="label">Status:</span><span className="val" style={{ color: '#38bdf8' }}>Pending Verification</span></div>
+            </div>
+            <p className="muted" style={{ fontSize: '11px', lineHeight: 1.5, margin: 0 }}>
+              AICTE security standards require that institutional affiliations and identity be verified before active account provisioning.
+            </p>
+            <button
+              type="button"
+              className="button primary full"
+              onClick={() => { setSuccessReq(null); setRegMode('none'); regMutation.reset(); }}
+            >
+              <ArrowLeft size={16} /> Return to Sign In
+            </button>
+          </div>
+        ) : regMode === 'student' ? (
+          <div>
+            <button type="button" className="login-back-btn" onClick={() => { setRegMode('none'); regMutation.reset(); }}>
+              <ArrowLeft size={15} /> Back to Sign In
+            </button>
+            <div className="login-icon"><GraduationCap size={26} /></div>
+            <p className="eyebrow">STUDENT PORTAL</p>
+            <h1>Register as Student</h1>
+            <p className="login-form-desc">Provide your academic enrollment details for institutional verification.</p>
+            <form onSubmit={e => submitRegistration(e, '/account-requests/student')}>
+              <Field title="Full Name">
+                <input name="name" placeholder="Full name as per official records" minLength={2} maxLength={120} required />
+              </Field>
+              <Field title="Email Address">
+                <input name="email" type="email" placeholder="student@college.edu or personal email" minLength={5} maxLength={180} required />
+              </Field>
+              <Field title="College Name">
+                <input name="college_name" placeholder="Full name of your institution" minLength={2} maxLength={200} required />
+              </Field>
+              <div className="form-row">
+                <Field title="Enrollment / Roll Number">
+                  <input name="roll_number" placeholder="Official roll/enrollment number" minLength={1} maxLength={60} required />
+                </Field>
+                <Field title="Academic Year">
+                  <input name="academic_year" placeholder="e.g. 2023-2027 (3rd Year)" minLength={2} maxLength={30} required />
+                </Field>
+              </div>
+              <Field title="Course / Department">
+                <input name="department" placeholder="e.g. B.Tech Computer Science" minLength={2} maxLength={100} required />
+              </Field>
+              <Field title="Password" hint="Minimum 8 characters">
+                <div className="password-input">
+                  <input name="password" type={show ? 'text' : 'password'} placeholder="Create a password" minLength={8} maxLength={128} required />
+                  <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </Field>
+              <FormError mutation={regMutation} />
+              <button className="button primary full" disabled={regMutation.isPending}>
+                {regMutation.isPending ? 'Submitting Request…' : 'Submit Student Registration'}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+          </div>
+        ) : regMode === 'college_rep' ? (
+          <div>
+            <button type="button" className="login-back-btn" onClick={() => { setRegMode('none'); regMutation.reset(); }}>
+              <ArrowLeft size={15} /> Back to Sign In
+            </button>
+            <div className="login-icon"><Building2 size={26} /></div>
+            <p className="eyebrow">INSTITUTIONAL LIAISON (ASOP)</p>
+            <h1>Request College Access</h1>
+            <p className="login-form-desc">Request authorization as a designated institutional representative for grievance redressal.</p>
+            <form onSubmit={e => submitRegistration(e, '/account-requests/college-rep')}>
+              <Field title="Full Name">
+                <input name="name" placeholder="Full name of representative" minLength={2} maxLength={120} required />
+              </Field>
+              <Field title="Official Email Address">
+                <input name="email" type="email" placeholder="official@institution.edu.in" minLength={5} maxLength={180} required />
+              </Field>
+              <Field title="College Name">
+                <input name="college_name" placeholder="Name of affiliated institution" minLength={2} maxLength={200} required />
+              </Field>
+              <div className="form-row">
+                <Field title="Employee / Representative ID" hint="Optional">
+                  <input name="employee_id" placeholder="Official institution faculty/staff ID" maxLength={60} />
+                </Field>
+                <Field title="Designation">
+                  <input name="designation" placeholder="e.g. Associate Professor & ASOP Officer" minLength={2} maxLength={100} required />
+                </Field>
+              </div>
+              <Field title="Reason for Access" hint="State your institutional role and authorization">
+                <textarea name="reason" placeholder="Explain your official role, appointment as ASOP liaison, or purpose of access…" minLength={10} maxLength={2000} rows={3} required />
+              </Field>
+              <Field title="Password" hint="Minimum 8 characters">
+                <div className="password-input">
+                  <input name="password" type={show ? 'text' : 'password'} placeholder="Create a password" minLength={8} maxLength={128} required />
+                  <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </Field>
+              <FormError mutation={regMutation} />
+              <button className="button primary full" disabled={regMutation.isPending}>
+                {regMutation.isPending ? 'Submitting Request…' : 'Submit Access Request'}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+          </div>
+        ) : regMode === 'officer' ? (
+          <div>
+            <button type="button" className="login-back-btn" onClick={() => { setRegMode('none'); regMutation.reset(); }}>
+              <ArrowLeft size={15} /> Back to Sign In
+            </button>
+            <div className="login-icon"><Briefcase size={26} /></div>
+            <p className="eyebrow">AICTE BUREAU OFFICIALS</p>
+            <h1>Request Officer Account</h1>
+            <p className="login-form-desc">Apply for an officer workspace account. Submissions require administrative verification against bureau rosters.</p>
+            <form onSubmit={e => submitRegistration(e, '/account-requests/officer')}>
+              <Field title="Full Name">
+                <input name="name" placeholder="Full name of officer" minLength={2} maxLength={120} required />
+              </Field>
+              <Field title="Official Email Address">
+                <input name="email" type="email" placeholder="officer@aicte.gov.in" minLength={5} maxLength={180} required />
+              </Field>
+              <div className="form-row">
+                <Field title="Employee ID" hint="Optional">
+                  <input name="employee_id" placeholder="e.g. AICTE-RB-8841" maxLength={60} />
+                </Field>
+                <Field title="Designation">
+                  <input name="designation" placeholder="e.g. Assistant Director" minLength={2} maxLength={100} required />
+                </Field>
+              </div>
+              <Field title="Bureau / Department">
+                <select name="bureau_code" required defaultValue="RB">
+                  <option value="RB">Regulation Bureau (RB)</option>
+                  <option value="PGRC">Public Grievance Redressal Cell (PGRC)</option>
+                  <option value="AB">Approval Bureau (AB)</option>
+                  <option value="PAPB">Policy & Academic Planning Bureau (PAPB)</option>
+                </select>
+              </Field>
+              <Field title="Reason for Access" hint="State your bureau assignment or case coordination duties">
+                <textarea name="reason" placeholder="Explain your official bureau duties, case triage responsibilities, or transfer coordination needs…" minLength={10} maxLength={2000} rows={3} required />
+              </Field>
+              <Field title="Password" hint="Minimum 8 characters">
+                <div className="password-input">
+                  <input name="password" type={show ? 'text' : 'password'} placeholder="Create a password" minLength={8} maxLength={128} required />
+                  <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </Field>
+              <FormError mutation={regMutation} />
+              <button className="button primary full" disabled={regMutation.isPending}>
+                {regMutation.isPending ? 'Submitting Request…' : 'Submit Officer Account Request'}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div>
+            <div className="login-icon"><ShieldCheck size={26} /></div>
+            <p className="eyebrow">OFFICER WORKSPACE</p>
+            <h1>Officer sign in</h1>
+            <p>Access your authorized bureau workspace and case records.</p>
+            {(expired || location.search.includes('expired')) && (
+              <div className="notice">Your session expired. Sign in to continue.</div>
+            )}
+            <form onSubmit={submitLogin}>
+              <Field title="Email address">
+                <input autoComplete="username" name="email" type="email" placeholder="officer@your-bureau.gov.in" required />
+              </Field>
+              <Field title="Password">
+                <div className="password-input">
+                  <input autoComplete="current-password" name="password" type={show ? 'text' : 'password'} placeholder="Enter your password" maxLength={1024} required />
+                  <button type="button" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow(!show)}>
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </Field>
+              <FormError mutation={loginMutation} />
+              <button className="button primary full" disabled={loginMutation.isPending}>
+                {loginMutation.isPending ? 'Signing in…' : 'Sign in to workspace'}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+
+            <div className="login-reg-section">
+              <div className="login-reg-title">New to OneCase?</div>
+              <div className="login-reg-options">
+                <button type="button" className="login-reg-btn" onClick={() => { setRegMode('student'); regMutation.reset(); }}>
+                  <div className="login-reg-btn-content">
+                    <span className="login-reg-btn-icon"><GraduationCap size={17} /></span>
+                    <span>Register as Student</span>
+                  </div>
+                  <ChevronRight size={16} className="login-reg-btn-arrow" />
+                </button>
+                <button type="button" className="login-reg-btn" onClick={() => { setRegMode('college_rep'); regMutation.reset(); }}>
+                  <div className="login-reg-btn-content">
+                    <span className="login-reg-btn-icon"><Building2 size={17} /></span>
+                    <span>Request College Access</span>
+                  </div>
+                  <ChevronRight size={16} className="login-reg-btn-arrow" />
+                </button>
+                <button type="button" className="login-reg-btn" onClick={() => { setRegMode('officer'); regMutation.reset(); }}>
+                  <div className="login-reg-btn-content">
+                    <span className="login-reg-btn-icon"><Briefcase size={17} /></span>
+                    <span>Request Officer Account</span>
+                  </div>
+                  <ChevronRight size={16} className="login-reg-btn-arrow" />
+                </button>
+              </div>
+            </div>
+
+            <div className="login-foot">
+              <ShieldCheck size={15} /> Access for provisioned bureau officers only
+            </div>
+          </div>
+        )}
+      </main>
+      <p className="login-bottom">AICTE Intelligent Institution Complaint Coordination & Tracking System</p>
+      <div className="login-status-notice">
+        <ShieldCheck size={15} />
+        <span>Authorized Officer Portal · Accounts must be provisioned through administrative workflow</span>
+      </div>
+    </div>
+  );
 }
 
 const nav = [{ path: '/dashboard', label: 'Overview', icon: LayoutDashboard }, { path: '/complaints', label: 'Complaints', icon: FolderOpen }, { path: '/institutions', label: 'Institutions', icon: Building2 }, { path: '/overlaps', label: 'Overlap review', icon: Link2 }, { path: '/alerts', label: 'Alerts', icon: Bell }, { path: '/audit-logs', label: 'Action logs', icon: Activity }, { path: '/reports', label: 'Reports', icon: FileCheck2 }];
@@ -58,10 +330,11 @@ function Shell() {
   const [dark, setDark] = useState(() => localStorage.getItem('onecase-theme') === 'dark');
   const [logoutError, setLogoutError] = useState<Error | null>(null);
   const navigate = useNavigate(); const location = useLocation();
+  const allNav = user.role === 'admin' ? [...nav, { path: '/account-requests', label: 'Account Requests', icon: UserCheck }] : nav;
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('onecase-theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { setMobile(false); window.scrollTo(0, 0); }, [location.pathname]);
-  const sidebar = <><Link to="/dashboard" className="brand"><img src="/logo.png" alt="OneCase Logo" className="sidebar-logo-img" /><div className="brand-title"><span className="brand-one">One</span><span className="brand-case">Case</span><span className="brand-badge">AICTE</span></div></Link><div className="workspace"><span className="workspace-icon"><Building2 size={19} /></span><div><strong>{user.bureau} workspace</strong><small>Complaint coordination</small></div><ChevronDown size={14} /></div><p className="nav-label">WORKSPACE</p><nav>{nav.map(item => <NavLink to={item.path} key={item.path} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}><item.icon size={19} />{item.label}{item.path === '/overlaps' && <span className="nav-dot" />}</NavLink>)}</nav><div className="sidebar-bottom"><div className="demo-note"><ShieldCheck size={18} /><strong>Authorized Workspace</strong><p>Real database persistence · Immutable action audit trail</p></div><div className="profile"><span className="avatar">{user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><strong>{user.name}</strong><small>{label(user.role)} · {user.bureau}</small></div><button aria-label="Sign out" className="icon-button" onClick={() => Promise.resolve(logout()).catch(e => setLogoutError(e))}><LogOut size={17} /></button></div></div></>;
-  return <div className="app-shell"><a href="#main" className="skip-link">Skip to content</a><aside className="sidebar">{sidebar}</aside><Dialog.Root open={mobile} onOpenChange={setMobile}><Dialog.Portal><Dialog.Overlay className="overlay" /><Dialog.Content className="mobile-sidebar"><Dialog.Title className="sr-only">Workspace navigation</Dialog.Title><Dialog.Description className="sr-only">Navigate the OneCase workspace.</Dialog.Description><Dialog.Close className="mobile-close icon-button" aria-label="Close navigation"><X /></Dialog.Close>{sidebar}</Dialog.Content></Dialog.Portal></Dialog.Root><div className="main-shell"><header className="topbar"><div className="breadcrumb"><button aria-label="Open navigation" className="icon-button mobile-menu" onClick={() => setMobile(true)}><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{nav.find(n => location.pathname.startsWith(n.path))?.label || 'Case details'}</strong></div><div className="topbar-actions"><form className="global-search" onSubmit={e => { e.preventDefault(); const value = new FormData(e.currentTarget).get('search'); navigate('/complaints?q=' + encodeURIComponent(String(value))); }}><Search size={16} /><input name="search" aria-label="Search cases or institutions" placeholder="Search cases or institutions…" /></form><button className="icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><Link to="/alerts" className="icon-button" aria-label="Open alerts"><Bell size={19} /></Link><span className="topbar-avatar">{user.name[0]}</span></div></header><main id="main" className="main-content"><ErrorBox error={logoutError} /><Outlet /></main><footer className="footer"><span>OneCase · Institution complaint coordination</span><span><span className="status-dot" /> Authorized workspace · Asia/Kolkata (IST)</span></footer></div></div>;
+  const sidebar = <><Link to="/dashboard" className="brand"><img src="/logo.png" alt="OneCase Logo" className="sidebar-logo-img" /><div className="brand-title"><span className="brand-one">One</span><span className="brand-case">Case</span><span className="brand-badge">AICTE</span></div></Link><div className="workspace"><span className="workspace-icon"><Building2 size={19} /></span><div><strong>{user.bureau} workspace</strong><small>Complaint coordination</small></div><ChevronDown size={14} /></div><p className="nav-label">WORKSPACE</p><nav>{allNav.map(item => <NavLink to={item.path} key={item.path} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}><item.icon size={19} />{item.label}{item.path === '/overlaps' && <span className="nav-dot" />}</NavLink>)}</nav><div className="sidebar-bottom"><div className="demo-note"><ShieldCheck size={18} /><strong>Authorized Workspace</strong><p>Real database persistence · Immutable action audit trail</p></div><div className="profile"><span className="avatar">{user.name.split(' ').map(n => n[0]).slice(0, 2).join('')}</span><div><strong>{user.name}</strong><small>{label(user.role)} · {user.bureau}</small></div><button aria-label="Sign out" className="icon-button" onClick={() => Promise.resolve(logout()).catch(e => setLogoutError(e))}><LogOut size={17} /></button></div></div></>;
+  return <div className="app-shell"><a href="#main" className="skip-link">Skip to content</a><aside className="sidebar">{sidebar}</aside><Dialog.Root open={mobile} onOpenChange={setMobile}><Dialog.Portal><Dialog.Overlay className="overlay" /><Dialog.Content className="mobile-sidebar"><Dialog.Title className="sr-only">Workspace navigation</Dialog.Title><Dialog.Description className="sr-only">Navigate the OneCase workspace.</Dialog.Description><Dialog.Close className="mobile-close icon-button" aria-label="Close navigation"><X /></Dialog.Close>{sidebar}</Dialog.Content></Dialog.Portal></Dialog.Root><div className="main-shell"><header className="topbar"><div className="breadcrumb"><button aria-label="Open navigation" className="icon-button mobile-menu" onClick={() => setMobile(true)}><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{allNav.find(n => location.pathname.startsWith(n.path))?.label || 'Case details'}</strong></div><div className="topbar-actions"><form className="global-search" onSubmit={e => { e.preventDefault(); const value = new FormData(e.currentTarget).get('search'); navigate('/complaints?q=' + encodeURIComponent(String(value))); }}><Search size={16} /><input name="search" aria-label="Search cases or institutions" placeholder="Search cases or institutions…" /></form><button className="icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><Link to="/alerts" className="icon-button" aria-label="Open alerts"><Bell size={19} /></Link><span className="topbar-avatar">{user.name[0]}</span></div></header><main id="main" className="main-content"><ErrorBox error={logoutError} /><Outlet /></main><footer className="footer"><span>OneCase · Institution complaint coordination</span><span><span className="status-dot" /> Authorized workspace · Asia/Kolkata (IST)</span></footer></div></div>;
 }
 
 function Filters({ status = false }: { status?: boolean }) {
@@ -292,4 +565,211 @@ function Audit() {
 function Reports() {
   const [params] = useSearchParams(); const query = useData<Summary>('/dashboard/summary?' + params);
   return <><Heading eyebrow="SCOPED OPERATIONAL REPORTING" title="Reports" description="Traceable counts from the same records used throughout your workspace." action={<a className="button primary" href={'/api/reports/complaints.csv?' + params}><ArrowDownToLine size={16} /> Export complaint register</a>} /><Filters /><ErrorBox error={query.error} retry={() => query.refetch()} />{query.data && <><div className="compare-grid"><section className="card report-card"><h2>Current receipt cohort</h2><dl>{[['Total complaints', query.data.total], ['Active cases', query.data.active], ['Overdue cases', query.data.overdue], ['Human-confirmed related pairs', query.data.confirmed_pairs], ['Pairs awaiting review', query.data.pending_pairs]].map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></section><section className="card report-card"><h2>Active case ageing</h2><p className="muted">Elapsed days since receipt · Current state as of {date(query.data.asOf, true)} IST</p>{query.data.ageing.map(a => <div className="age-row" key={a.label}><span>{a.label}</span><div><i style={{ width: `${query.data!.active ? a.count / query.data!.active * 100 : 0}%` }} /></div><strong>{a.count}</strong></div>)}</section></div><section className="card report-card"><h2>Interpretation and export scope</h2><p>The export contains only authorized complaints matching the selected filters. Active means any case that is not disposed. Overdue means an active case with a due timestamp earlier than this report's current time.</p><p>Pair counts require access to both complaints; at least one must belong to the selected cohort. Confirmed means a human marked the pair related. Machine scores alone never count as confirmation.</p><p>{query.data.policy}</p></section></>}</>;
+}
+
+function AccountRequestsManager() {
+  const [status, setStatus] = useState<string>('pending');
+  const [type, setType] = useState<string>('');
+  const query = useData<{ items: AccountRequest[]; total: number }>(`/account-requests?${status ? `status=${status}` : ''}${type ? `&type=${type}` : ''}`);
+  const [reviewModal, setReviewModal] = useState<{ req: AccountRequest; decision: 'approved' | 'rejected' } | null>(null);
+  const client = useQueryClient();
+  const toast = useContext(Toast);
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, decision, reason }: { id: number; decision: string; reason: string }) =>
+      post<AccountRequest>(`/account-requests/${id}/review`, { decision, reason }),
+    onSuccess: () => {
+      client.invalidateQueries();
+      toast('Account request reviewed successfully.');
+      setReviewModal(null);
+    }
+  });
+
+  function handleReviewSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!reviewModal) return;
+    const form = new FormData(e.currentTarget);
+    reviewMutation.mutate({
+      id: reviewModal.req.id,
+      decision: reviewModal.decision,
+      reason: String(form.get('reason'))
+    });
+  }
+
+  return (
+    <>
+      <Heading
+        eyebrow="ADMINISTRATIVE VERIFICATION"
+        title="Account Requests"
+        description="Review, verify institutional affiliation, and approve or reject access requests."
+      />
+      <div className="filter-tabs">
+        {[
+          { key: 'pending', label: 'Pending Verification' },
+          { key: 'approved', label: 'Approved' },
+          { key: 'rejected', label: 'Rejected' },
+          { key: '', label: 'All Requests' }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            className={status === tab.key ? 'selected' : ''}
+            onClick={() => setStatus(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <ErrorBox error={query.error} retry={() => query.refetch()} />
+      {query.isPending ? (
+        <Loading />
+      ) : query.data && (
+        <>
+          {query.data.items.length === 0 ? (
+            <Empty title={`No ${status || ''} account requests found`} />
+          ) : (
+            <div className="req-grid">
+              {query.data.items.map(req => (
+                <div key={req.id} className="req-card">
+                  <div className="req-header">
+                    <div className="req-user">
+                      <strong>{req.name}</strong>
+                      <span>{req.email}</span>
+                    </div>
+                    <Badge value={req.status} tone={req.status === 'approved' ? 'completed' : req.status === 'rejected' ? 'failed' : 'pending'} />
+                  </div>
+                  <div className="req-body">
+                    <div className="req-body-row">
+                      <span className="label">Request Type:</span>
+                      <span className="val">{req.request_type === 'student' ? 'Student' : req.request_type === 'college_rep' ? 'College Rep (ASOP)' : 'AICTE Officer'}</span>
+                    </div>
+                    {req.college_name && (
+                      <div className="req-body-row">
+                        <span className="label">College / Institution:</span>
+                        <span className="val">{req.college_name}</span>
+                      </div>
+                    )}
+                    {req.roll_number && (
+                      <div className="req-body-row">
+                        <span className="label">Roll / Enrollment No:</span>
+                        <span className="val">{req.roll_number}</span>
+                      </div>
+                    )}
+                    {req.department && (
+                      <div className="req-body-row">
+                        <span className="label">Department / Course:</span>
+                        <span className="val">{req.department}</span>
+                      </div>
+                    )}
+                    {req.academic_year && (
+                      <div className="req-body-row">
+                        <span className="label">Academic Year:</span>
+                        <span className="val">{req.academic_year}</span>
+                      </div>
+                    )}
+                    {req.employee_id && (
+                      <div className="req-body-row">
+                        <span className="label">Employee ID:</span>
+                        <span className="val">{req.employee_id}</span>
+                      </div>
+                    )}
+                    {req.designation && (
+                      <div className="req-body-row">
+                        <span className="label">Designation:</span>
+                        <span className="val">{req.designation}</span>
+                      </div>
+                    )}
+                    {req.bureau_code && (
+                      <div className="req-body-row">
+                        <span className="label">Bureau:</span>
+                        <span className="val">{req.bureau_code}</span>
+                      </div>
+                    )}
+                    {req.reason && (
+                      <div style={{ marginTop: 4 }}>
+                        <span className="label" style={{ display: 'block', marginBottom: 2 }}>Reason for Access:</span>
+                        <p style={{ margin: 0, fontStyle: 'italic', color: '#cbd5e1' }}>{req.reason}</p>
+                      </div>
+                    )}
+                    <div className="req-body-row" style={{ marginTop: 4 }}>
+                      <span className="label">Submitted:</span>
+                      <span className="val">{date(req.created_at, true)} IST</span>
+                    </div>
+                    {req.reviewed_at && (
+                      <div className="req-body-row">
+                        <span className="label">Reviewed:</span>
+                        <span className="val">{date(req.reviewed_at, true)} by {req.reviewer_name || 'Admin'}</span>
+                      </div>
+                    )}
+                    {req.reviewer_decision_reason && (
+                      <div style={{ marginTop: 2 }}>
+                        <span className="label">Decision Reason:</span>
+                        <p style={{ margin: 0, color: '#fca5a5' }}>{req.reviewer_decision_reason}</p>
+                      </div>
+                    )}
+                  </div>
+                  {req.status === 'pending' && (
+                    <div className="req-actions">
+                      <button
+                        type="button"
+                        className="button primary small"
+                        onClick={() => setReviewModal({ req, decision: 'approved' })}
+                      >
+                        <Check size={14} /> Approve & Provision
+                      </button>
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        onClick={() => setReviewModal({ req, decision: 'rejected' })}
+                      >
+                        <X size={14} /> Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {reviewModal && (
+        <Modal
+          title={reviewModal.decision === 'approved' ? 'Approve Account Request' : 'Reject Account Request'}
+          description={`Applicant: ${reviewModal.req.name} (${reviewModal.req.email}) · Type: ${reviewModal.req.request_type}`}
+          open={!!reviewModal}
+          onOpenChange={open => !open && setReviewModal(null)}
+        >
+          <form onSubmit={handleReviewSubmit} className="form-grid">
+            <Field
+              title="Verification & Review Decision Reason"
+              hint={reviewModal.decision === 'approved'
+                ? "Document how applicant's identity and organizational affiliation were verified."
+                : "Provide the reason for rejecting this account request."}
+            >
+              <textarea
+                name="reason"
+                required
+                minLength={5}
+                maxLength={2000}
+                rows={4}
+                autoFocus
+                placeholder={reviewModal.decision === 'approved'
+                  ? "e.g. Identity and enrollment verified against official college register."
+                  : "e.g. Incomplete documentation or unauthorized designation."}
+              />
+            </Field>
+            <FormError mutation={reviewMutation} />
+            <button
+              type="submit"
+              className={`button ${reviewModal.decision === 'approved' ? 'primary' : 'secondary'}`}
+              disabled={reviewMutation.isPending}
+            >
+              {reviewMutation.isPending ? 'Recording…' : reviewModal.decision === 'approved' ? 'Confirm Approval & Create User' : 'Confirm Rejection'}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
 }

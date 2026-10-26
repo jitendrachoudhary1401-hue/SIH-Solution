@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 from .auth import authenticated, case_or_404, check_version, digest, scope
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
-                     Pair, Review, Idempotency, MatchingRun, SLAPause)
+                     Pair, Review, Idempotency, MatchingRun, SLAPause, AccountRequest)
 
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
@@ -93,6 +93,62 @@ class UserProvision(Input):
     password: str = Field(min_length=12, max_length=128)
 
 
+class StudentRegistration(Input):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=180)
+    password: str = Field(min_length=8, max_length=128)
+    college_name: str = Field(min_length=2, max_length=200)
+    roll_number: str = Field(min_length=1, max_length=60)
+    department: str = Field(min_length=2, max_length=100)
+    academic_year: str = Field(min_length=2, max_length=30)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, v):
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email format")
+        return v.strip().lower()
+
+
+class CollegeRepRegistration(Input):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=180)
+    password: str = Field(min_length=8, max_length=128)
+    college_name: str = Field(min_length=2, max_length=200)
+    employee_id: str | None = Field(default=None, max_length=60)
+    designation: str = Field(min_length=2, max_length=100)
+    reason: str = Field(min_length=10, max_length=2000)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, v):
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email format")
+        return v.strip().lower()
+
+
+class OfficerAccountRequestInput(Input):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=180)
+    password: str = Field(min_length=8, max_length=128)
+    employee_id: str | None = Field(default=None, max_length=60)
+    designation: str = Field(min_length=2, max_length=100)
+    bureau_code: str = Field(min_length=2, max_length=30)
+    reason: str = Field(min_length=10, max_length=2000)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, v):
+        if "@" not in v or "." not in v.split("@")[-1]:
+            raise ValueError("Invalid email format")
+        return v.strip().lower()
+
+
+class AccountRequestReview(Input):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    reason: str = Field(default="", max_length=2000)
+
+
 def parse(schema):
     try:
         return schema.model_validate(request.get_json(silent=True) or {})
@@ -110,6 +166,32 @@ def body():
 def user_json(user):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
             "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Explicit scope"}
+
+
+def account_request_json(req):
+    return {
+        "id": req.id,
+        "request_type": req.request_type,
+        "name": req.name,
+        "email": req.email,
+        "college_name": req.college_name,
+        "institution_id": req.institution_id,
+        "institution_name": req.institution.name if req.institution else req.college_name,
+        "roll_number": req.roll_number,
+        "department": req.department,
+        "academic_year": req.academic_year,
+        "employee_id": req.employee_id,
+        "designation": req.designation,
+        "bureau_code": req.bureau_code,
+        "reason": req.reason,
+        "status": req.status,
+        "created_at": iso(req.created_at),
+        "reviewed_at": iso(req.reviewed_at),
+        "reviewer_id": req.reviewer_id,
+        "reviewer_name": req.reviewer.name if req.reviewer else None,
+        "reviewer_decision_reason": req.reviewer_decision_reason,
+        "user_id": req.user_id,
+    }
 
 
 def institution_json(inst):
@@ -230,6 +312,18 @@ def login():
     except (VerificationError, InvalidHashError):
         valid = False
     if not user or not valid:
+        pending_req = db.session.scalar(select(AccountRequest).where(AccountRequest.email == email).order_by(AccountRequest.created_at.desc()))
+        if pending_req:
+            try:
+                req_valid = hasher.verify(pending_req.password_hash, password[:1024])
+            except (VerificationError, InvalidHashError):
+                req_valid = False
+            if req_valid:
+                if pending_req.status == "pending":
+                    abort(403, description="Your account request is pending administrative verification. Access will be enabled once approved by an administrator.")
+                elif pending_req.status == "rejected":
+                    reason_msg = f" Reason: {pending_req.reviewer_decision_reason}" if pending_req.reviewer_decision_reason else ""
+                    abort(403, description=f"Your account request was reviewed and rejected.{reason_msg}")
         abort(401, description="Email or password is incorrect.")
     old = request.cookies.get("onecase_session")
     if old and (old_session := db.session.get(Session, digest(old))):
@@ -338,6 +432,172 @@ def provision_user_account():
     db.session.add(user)
     db.session.commit()
     return user_json(user), 201
+
+
+def check_duplicate_account_request(email: str):
+    existing_user = db.session.scalar(select(User).where(User.email == email))
+    if existing_user:
+        abort(409, description="An account with this email address already exists. Please sign in.")
+    existing_req = db.session.scalar(select(AccountRequest).where(AccountRequest.email == email, AccountRequest.status == "pending"))
+    if existing_req:
+        abort(409, description="An account request for this email address is already pending administrative verification.")
+
+
+@api.post("/account-requests/student")
+def register_student():
+    data = parse(StudentRegistration)
+    check_duplicate_account_request(data.email)
+    inst = db.session.scalar(select(Institution).where(Institution.name.ilike(data.college_name.strip())))
+    req = AccountRequest(
+        request_type="student",
+        name=data.name.strip(),
+        email=data.email,
+        password_hash=hasher.hash(data.password),
+        college_name=data.college_name.strip(),
+        institution_id=inst.id if inst else None,
+        roll_number=data.roll_number.strip(),
+        department=data.department.strip(),
+        academic_year=data.academic_year.strip(),
+        status="pending"
+    )
+    db.session.add(req)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "id": req.id,
+        "status": "pending",
+        "message": "Student registration request submitted successfully. It is now pending administrative verification."
+    }), 201
+
+
+@api.post("/account-requests/college-rep")
+def register_college_rep():
+    data = parse(CollegeRepRegistration)
+    check_duplicate_account_request(data.email)
+    inst = db.session.scalar(select(Institution).where(Institution.name.ilike(data.college_name.strip())))
+    req = AccountRequest(
+        request_type="college_rep",
+        name=data.name.strip(),
+        email=data.email,
+        password_hash=hasher.hash(data.password),
+        college_name=data.college_name.strip(),
+        institution_id=inst.id if inst else None,
+        employee_id=data.employee_id.strip() if data.employee_id else None,
+        designation=data.designation.strip(),
+        reason=data.reason.strip(),
+        status="pending"
+    )
+    db.session.add(req)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "id": req.id,
+        "status": "pending",
+        "message": "College representative access request submitted successfully. It is now pending administrative verification."
+    }), 201
+
+
+@api.post("/account-requests/officer")
+def register_officer():
+    data = parse(OfficerAccountRequestInput)
+    check_duplicate_account_request(data.email)
+    req = AccountRequest(
+        request_type="officer",
+        name=data.name.strip(),
+        email=data.email,
+        password_hash=hasher.hash(data.password),
+        employee_id=data.employee_id.strip() if data.employee_id else None,
+        designation=data.designation.strip(),
+        bureau_code=data.bureau_code.strip().upper(),
+        reason=data.reason.strip(),
+        status="pending"
+    )
+    db.session.add(req)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "id": req.id,
+        "status": "pending",
+        "message": "AICTE Officer account request submitted successfully. It is now pending administrative verification."
+    }), 201
+
+
+@api.get("/account-requests")
+@authenticated
+def list_account_requests():
+    if g.user.role != "admin":
+        abort(403, description="Only administrators may review account requests.")
+    query = select(AccountRequest)
+    status_filter = request.args.get("status")
+    if status_filter:
+        query = query.where(AccountRequest.status == status_filter)
+    req_type = request.args.get("type")
+    if req_type:
+        query = query.where(AccountRequest.request_type == req_type)
+    requests = db.session.scalars(query.order_by(AccountRequest.created_at.desc())).all()
+    return {"items": [account_request_json(r) for r in requests], "total": len(requests)}
+
+
+@api.get("/account-requests/<int:req_id>")
+@authenticated
+def get_account_request(req_id):
+    if g.user.role != "admin":
+        abort(403, description="Only administrators may review account requests.")
+    req = db.session.get(AccountRequest, req_id)
+    if not req:
+        abort(404, description="Account request not found.")
+    return account_request_json(req)
+
+
+@api.post("/account-requests/<int:req_id>/review")
+@authenticated
+def review_account_request(req_id):
+    if g.user.role != "admin":
+        abort(403, description="Only administrators may review account requests.")
+    req = db.session.get(AccountRequest, req_id)
+    if not req:
+        abort(404, description="Account request not found.")
+    if req.email == g.user.email:
+        abort(403, description="Administrators cannot review their own account request.")
+    if req.status != "pending":
+        abort(409, description=f"This request has already been reviewed (status: {req.status}).")
+
+    data = parse(AccountRequestReview)
+    req.status = data.decision
+    req.reviewed_at = now()
+    req.reviewer_id = g.user.id
+    req.reviewer_decision_reason = data.reason.strip() if data.reason else None
+
+    if data.decision == "approved":
+        existing_user = db.session.scalar(select(User).where(User.email == req.email))
+        if existing_user:
+            abort(409, description="A user with this email address already exists.")
+
+        role = req.request_type
+        bureau_id = None
+        if req.request_type == "officer":
+            bureau = db.session.scalar(select(Bureau).where(Bureau.code == (req.bureau_code or "RB").upper()))
+            if not bureau:
+                bureau = db.session.scalar(select(Bureau))
+            bureau_id = bureau.id if bureau else None
+
+        new_user = User(
+            name=req.name,
+            email=req.email,
+            role=role,
+            bureau_id=bureau_id,
+            password_hash=req.password_hash,
+            active=True
+        )
+        db.session.add(new_user)
+        db.session.flush()
+        req.user_id = new_user.id
+        event(None, "account_approved", f"Account request approved for {req.email} ({role})", data.reason or "Administrative approval", actor=g.user)
+    else:
+        event(None, "account_rejected", f"Account request rejected for {req.email} ({req.request_type})", data.reason or "Administrative rejection", actor=g.user)
+
+    db.session.commit()
+    return account_request_json(req)
 
 
 @api.get("/institutions/<int:item_id>")

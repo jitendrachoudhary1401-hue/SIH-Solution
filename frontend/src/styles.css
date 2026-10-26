@@ -986,3 +986,222 @@ tbody tr:hover { background: var(--hover); }
 @media(prefers-reduced-motion: reduce) {
   *, *:before, *:after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* OneCase Registration Workflow Styles */
+.login-reg-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #162a4a;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-reg-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #94a3b8;
+  font-weight: 700;
+  text-align: center;
+}
+.login-reg-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.login-reg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(15, 39, 74, 0.6);
+  border: 1px solid #1e3a66;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+.login-reg-btn:hover {
+  background: #163666;
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.login-reg-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.login-reg-btn-icon {
+  color: #38bdf8;
+  display: flex;
+}
+.login-reg-btn-arrow {
+  color: #64748b;
+  transition: transform 0.2s;
+}
+.login-reg-btn:hover .login-reg-btn-arrow {
+  color: #38bdf8;
+  transform: translateX(3px);
+}
+.login-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 14px;
+  padding: 0;
+}
+.login-back-btn:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+.login-form-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+.login-success-box {
+  background: rgba(14, 40, 74, 0.95);
+  border: 1px solid #0284c7;
+  border-radius: 10px;
+  padding: 22px 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.login-success-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(2, 132, 199, 0.2);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-success-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+.login-success-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin: 0;
+}
+.login-success-details {
+  width: 100%;
+  background: #070e1c;
+  border: 1px solid #1e355b;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: #cbd5e1;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.login-success-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.login-success-details span.label {
+  color: #64748b;
+  font-weight: 500;
+}
+.login-success-details span.val {
+  color: #e2e8f0;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* Admin Account Requests Management View */
+.req-table-wrapper {
+  overflow-x: auto;
+}
+.req-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.req-card {
+  background: var(--card-bg, #0b172a);
+  border: 1px solid var(--card-border, #1e355b);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.req-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.req-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.req-user strong {
+  font-size: 15px;
+  color: #f8fafc;
+}
+.req-user span {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.req-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  border-top: 1px solid #162a4a;
+  border-bottom: 1px solid #162a4a;
+  padding: 10px 0;
+}
+.req-body-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.req-body-row span.label {
+  color: #64748b;
+}
+.req-body-row span.val {
+  color: #e2e8f0;
+  font-weight: 500;
+  text-align: right;
+}
+.req-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+.req-actions .button {
+  flex: 1;
+  justify-content: center;
+}
+

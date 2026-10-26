@@ -233,3 +233,34 @@ class PairScore(db.Model):
     run_id = db.Column(db.Integer, db.ForeignKey("matching_run.id"), nullable=False)
     evidence = db.Column(db.JSON, nullable=False)
     __table_args__ = (UniqueConstraint("pair_id", "run_id"),)
+
+
+class AccountRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    request_type = db.Column(db.String(30), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(180), nullable=False, index=True)
+    password_hash = db.Column(db.Text, nullable=False)
+    college_name = db.Column(db.String(200))
+    institution_id = db.Column(db.Integer, db.ForeignKey("institution.id"))
+    roll_number = db.Column(db.String(60))
+    department = db.Column(db.String(100))
+    academic_year = db.Column(db.String(30))
+    employee_id = db.Column(db.String(60))
+    designation = db.Column(db.String(100))
+    bureau_code = db.Column(db.String(30))
+    reason = db.Column(db.Text)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
+    reviewed_at = db.Column(db.DateTime(timezone=True))
+    reviewer_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewer_decision_reason = db.Column(db.Text)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    institution = db.relationship("Institution")
+    reviewer = db.relationship("User", foreign_keys=[reviewer_id])
+    user = db.relationship("User", foreign_keys=[user_id])
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'approved', 'rejected')"),
+        CheckConstraint("request_type IN ('student', 'college_rep', 'officer')"),
+    )

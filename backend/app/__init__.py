@@ -40,6 +40,8 @@ def create_app(config=None):
         FRONTEND_PATH=str(root / "frontend" / "dist"),
     )
     app.config.update(config or {})
+    if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {}
     Path(app.config["STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
     Migrate(app, db)
