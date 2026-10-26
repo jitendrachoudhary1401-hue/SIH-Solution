@@ -22,6 +22,13 @@ def monitor():
         pending = [t for t in transfers if t.to_owner_id == case.owner_id and not t.acknowledged_at and t.created_at.replace(tzinfo=timezone.utc) < now() - timedelta(days=2)]
         if pending:
             notify(case.owner_id, case, "bottleneck", f"{case.reference}: transfer acknowledgement waiting more than 48 hours (illustrative v1).", f"bottleneck:ack:v1:{pending[-1].id}")
+    from .models import User
+    for bureau_id in {c.bureau_id for c in active}:
+        cohort = [c for c in active if c.bureau_id == bureau_id]
+        overdue = [c for c in cohort if c.due_at and not c.paused_at and c.due_at.replace(tzinfo=timezone.utc) < now()]
+        if len(cohort) >= 5 and len(overdue) / len(cohort) >= .5:
+            for lead in db.session.scalars(select(User).where(User.bureau_id == bureau_id, User.role == "lead", User.active.is_(True))):
+                notify(lead.id, overdue[0], "bottleneck", f"Bureau backlog: {len(overdue)} / {len(cohort)} active cases overdue; illustrative rule v1 (50%, minimum 5).", f"bottleneck:backlog:v1:{bureau_id}:{now().date()}:{lead.id}")
     db.session.commit()
 
 
@@ -33,6 +40,11 @@ def tick(models=None):
     if not job:
         db.session.rollback()
         return False
+    current = db.session.get(Complaint, job.complaint_id)
+    if current.content_revision != job.revision:
+        job.state = "superseded"
+        db.session.commit()
+        return True
     job.state, job.lease_until, job.attempts = "running", now() + timedelta(minutes=15), job.attempts + 1
     case = db.session.get(Complaint, job.complaint_id)
     case.matching_state = "processing"

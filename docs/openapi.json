@@ -1,0 +1,1429 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OneCase API",
+    "version": "1.0.0",
+    "description": "Officer workspace API. Mutations require a same-origin request and X-CSRF-Token returned by auth/me or login."
+  },
+  "paths": {
+    "/api/attachments/{attachment_id}/download": {
+      "get": {
+        "operationId": "api_download_get",
+        "summary": "download",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/audit-logs": {
+      "get": {
+        "operationId": "api_audit_get",
+        "summary": "audit",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "api_login_post",
+        "summary": "login",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "api_logout_post",
+        "summary": "logout",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "api_me_get",
+        "summary": "me",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "api_refresh_post",
+        "summary": "refresh",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/complaints": {
+      "post": {
+        "operationId": "api_register_case_post",
+        "summary": "register case",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          },
+          "201": {
+            "description": "Registered complaint"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Registration"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/complaints/{case_id}": {
+      "patch": {
+        "operationId": "api_edit_case_patch",
+        "summary": "edit case",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdinaryChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/complaints/{case_id}/actions": {
+      "get": {
+        "operationId": "api_history_get",
+        "summary": "history",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/complaints/{case_id}/attachments": {
+      "post": {
+        "operationId": "api_upload_post",
+        "summary": "upload",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/complaints/{case_id}/matching/retry": {
+      "post": {
+        "operationId": "api_retry_matching_post",
+        "summary": "retry matching",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/complaints/{case_id}/sla/{operation}": {
+      "post": {
+        "operationId": "api_sla_clock_post",
+        "summary": "sla clock",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "operation",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Change"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/complaints/{case_id}/status": {
+      "post": {
+        "operationId": "api_change_status_post",
+        "summary": "change status",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/complaints/{case_id}/transfer": {
+      "post": {
+        "operationId": "api_transfer_post",
+        "summary": "transfer",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dashboard/summary": {
+      "get": {
+        "operationId": "api_dashboard_get",
+        "summary": "dashboard",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/directory": {
+      "get": {
+        "operationId": "api_directory_get",
+        "summary": "directory",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "health_get",
+        "summary": "health",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/api/institutions": {
+      "get": {
+        "operationId": "api_institutions_get",
+        "summary": "institutions",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/institutions/{item_id}": {
+      "get": {
+        "operationId": "api_institution_detail_get",
+        "summary": "institution detail",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/institutions/{item_id}/complaints": {
+      "get": {
+        "operationId": "api_institution_cases_get",
+        "summary": "institution cases",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "operationId": "api_notifications_get",
+        "summary": "notifications",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/notifications/{item_id}": {
+      "patch": {
+        "operationId": "api_read_notification_patch",
+        "summary": "read notification",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/operations": {
+      "get": {
+        "operationId": "api_operations_get",
+        "summary": "operations",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/overlaps": {
+      "get": {
+        "operationId": "api_overlaps_get",
+        "summary": "overlaps",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/overlaps/{pair_id}": {
+      "get": {
+        "operationId": "api_overlap_detail_get",
+        "summary": "overlap detail",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "pair_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/overlaps/{pair_id}/review": {
+      "post": {
+        "operationId": "api_review_post",
+        "summary": "review",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "pair_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reports/complaints.csv": {
+      "get": {
+        "operationId": "api_export_get",
+        "summary": "export",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/reports/metrics": {
+      "get": {
+        "operationId": "api_report_metrics_get",
+        "summary": "report metrics",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    },
+    "/api/transfers/{transfer_id}/acknowledge": {
+      "post": {
+        "operationId": "api_acknowledge_post",
+        "summary": "acknowledge",
+        "responses": {
+          "200": {
+            "description": "Success; list endpoints return items, total, nextCursor and asOf"
+          },
+          "401": {
+            "description": "Missing or expired session"
+          },
+          "403": {
+            "description": "Forbidden or invalid CSRF token"
+          },
+          "404": {
+            "description": "Resource unavailable in authorized scope"
+          },
+          "409": {
+            "description": "Stale version or concurrent mutation"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "parameters": [
+          {
+            "name": "transfer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {
+            "officerSession": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Registration": {
+        "additionalProperties": false,
+        "properties": {
+          "institution_id": {
+            "exclusiveMinimum": 0,
+            "title": "Institution Id",
+            "type": "integer"
+          },
+          "owner_id": {
+            "exclusiveMinimum": 0,
+            "title": "Owner Id",
+            "type": "integer"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 20000,
+            "minLength": 20,
+            "title": "Description",
+            "type": "string"
+          },
+          "priority": {
+            "default": "normal",
+            "title": "Priority",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Due At"
+          },
+          "deadline_reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Deadline Reason",
+            "type": "string"
+          },
+          "deadline_rule": {
+            "default": "none",
+            "title": "Deadline Rule",
+            "type": "string"
+          },
+          "next_action": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Next Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "institution_id",
+          "owner_id",
+          "category",
+          "description",
+          "received_at",
+          "next_action"
+        ],
+        "title": "Registration",
+        "type": "object"
+      },
+      "OrdinaryChange": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "minLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Next Action"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Priority"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Due At"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "OrdinaryChange",
+        "type": "object"
+      },
+      "StatusChange": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "reason",
+          "status"
+        ],
+        "title": "StatusChange",
+        "type": "object"
+      },
+      "ActionChange": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          },
+          "next_action": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Next Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "ActionChange",
+        "type": "object"
+      },
+      "TransferChange": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          },
+          "owner_id": {
+            "exclusiveMinimum": 0,
+            "title": "Owner Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "reason",
+          "owner_id"
+        ],
+        "title": "TransferChange",
+        "type": "object"
+      },
+      "ReviewChange": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "reason",
+          "decision"
+        ],
+        "title": "ReviewChange",
+        "type": "object"
+      },
+      "Change": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "Change",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "officerSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "onecase_session"
+      }
+    }
+  }
+}

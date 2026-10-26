@@ -1,5 +1,6 @@
 """Disposable synthetic database for browser tests; never touches the user's demo DB."""
 import tempfile
+import os
 from pathlib import Path
 from waitress import serve
 from app import create_app
@@ -14,4 +15,7 @@ with tempfile.TemporaryDirectory(prefix="onecase-e2e-") as directory:
         db.create_all()
         seed_demo("OneCaseDemo!2026")
         monitor()
+        if os.getenv("E2E_MATCHING") == "1":
+            from app.matching import process
+            process(1, 1)
     serve(app, host="127.0.0.1", port=5051)

@@ -445,7 +445,7 @@ def change_status(case_id):
     previous = case.status
     case.status = data.status
     event(case, "reopened" if previous == "disposed" else "status_changed", f"Status changed to {case.status.replace('_', ' ')}",
-          data.reason, {"status": {"before": previous, "after": case.status}})
+          data.reason, {"status": {"before": previous, "after": case.status}, "deadline_at": iso(case.due_at), "deadline_policy": case.deadline_policy, "paused_at": iso(case.paused_at)})
     db.session.commit()
     return case_json(case, True)
 
@@ -659,7 +659,7 @@ def read_notification(item_id):
 @authenticated
 def audit():
     visible = filtered_cases().with_only_columns(Complaint.id)
-    query = select(ActionEvent).where(ActionEvent.complaint_id.in_(visible))
+    query = select(ActionEvent).where(or_(ActionEvent.complaint_id.in_(visible), and_(ActionEvent.complaint_id.is_(None), ActionEvent.actor_id == g.user.id)))
     if request.args.get("kind"):
         query = query.where(ActionEvent.kind.in_(request.args["kind"].split(",")))
     if request.args.get("actor"):
@@ -669,7 +669,7 @@ def audit():
 
 def attention_key(case):
     priority = {"urgent": 3, "high": 2, "normal": 1, "low": 0}
-    urgency = {"overdue": 3, "due_soon": 2, "on_track": 1, "not_set": 0}
+    urgency = {"overdue": 3, "due_soon": 2, "on_track": 1, "not_set": 0, "paused": 0}
     return (-urgency.get(condition(case), 0), -priority[case.priority], iso(case.due_at) or "9999", iso(case.received_at), case.id)
 
 
@@ -717,3 +717,36 @@ def export():
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="onecase-complaints.csv"'
     return response
+
+
+@api.get("/reports/metrics")
+@authenticated
+def report_metrics():
+    cohort = filtered_cases().with_only_columns(Complaint.id)
+    events = db.session.scalars(select(ActionEvent).where(ActionEvent.complaint_id.in_(cohort)).order_by(ActionEvent.created_at, ActionEvent.id)).all()
+    starts, episodes = {}, []
+    for item in events:
+        if item.kind in ("registered", "reopened"):
+            starts[item.complaint_id] = item.created_at
+        if item.kind == "status_changed" and item.changes.get("status", {}).get("after") == "disposed":
+            start = starts.pop(item.complaint_id, None)
+            if start:
+                hours = (item.created_at - start).total_seconds() / 3600
+                deadline = item.changes.get("deadline_at")
+                compliant = item.created_at.replace(tzinfo=timezone.utc) <= datetime.fromisoformat(deadline) if deadline and not item.changes.get("paused_at") else None
+                episodes.append({"case_id": item.complaint_id, "hours": round(hours, 2), "compliant": compliant})
+    eligible = [e for e in episodes if e["compliant"] is not None]
+    return {"disposed_episodes": len(episodes), "mean_resolution_hours": round(sum(e["hours"] for e in episodes) / len(episodes), 2) if episodes else None,
+            "sla_eligible_episodes": len(eligible), "sla_excluded_episodes": len(episodes) - len(eligible),
+            "sla_compliance": sum(e["compliant"] for e in eligible) / len(eligible) if eligible else None,
+            "definition": "Completed lifecycle episodes in the selected receipt cohort. SLA uses the deadline snapshot recorded at disposal; missing historical snapshots and actively paused clocks are excluded. Reopened episodes are counted separately.", "asOf": iso(now())}
+
+
+@api.get("/operations")
+@authenticated
+def operations():
+    if g.user.role != "admin":
+        abort(403, description="Administrator access required.")
+    counts = {state: db.session.scalar(select(func.count()).select_from(Job).where(Job.state == state)) for state in ("queued", "running", "failed", "completed", "superseded")}
+    oldest = db.session.scalar(select(func.min(Job.available_at)).where(Job.state == "queued"))
+    return {"jobs": counts, "oldest_queued_at": iso(oldest), "asOf": iso(now())}

@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: onecase
+      POSTGRES_USER: onecase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U onecase -d onecase]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    build: .
+    environment: &environment
+      DATABASE_URL: postgresql+psycopg://onecase:${POSTGRES_PASSWORD}@db:5432/onecase
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MODEL_PATH: /app/.runtime/models
+    command: [python, -m, flask, --app, backend.app, db, upgrade, -d, backend/migrations]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - runtime:/app/.runtime
+  web:
+    build: .
+    environment: *environment
+    ports: ["127.0.0.1:5000:5000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - runtime:/app/.runtime
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  worker:
+    build: .
+    environment: *environment
+    command: [python, backend/worker.py]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - runtime:/app/.runtime
+    restart: unless-stopped
+volumes:
+  database:
+  runtime:

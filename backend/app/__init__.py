@@ -54,6 +54,13 @@ def create_app(config=None):
     @app.errorhandler(HTTPException)
     def http_error(error):
         db.session.rollback()
+        from flask import g
+        from .models import ActionEvent
+        if error.code in (403, 409, 422) and getattr(g, "user", None):
+            db.session.add(ActionEvent(actor_id=g.user.id, actor_name=g.user.name, bureau_id=g.user.bureau_id,
+                                      kind="request_rejected", summary="A write request was rejected", reason="Request validation or authorization did not pass.",
+                                      outcome="denied" if error.code == 403 else "failed", severity="warning"))
+            db.session.commit()
         return jsonify(error={"message": error.description, "status": error.code}), error.code
 
     @app.errorhandler(StaleDataError)

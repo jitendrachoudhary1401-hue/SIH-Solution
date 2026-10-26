@@ -85,3 +85,17 @@ test('direct API access is scoped and rejects missing CSRF', async ({ page }) =>
   const csrf = await page.request.post('/api/complaints/1/actions', { data: { version: 1, reason: 'Invalid token test' } });
   expect(csrf.status()).toBe(403);
 });
+
+test('reviewer compares real model evidence and records a decision', async ({ page }) => {
+  test.skip(process.env.E2E_MATCHING !== '1', 'Run with E2E_MATCHING=1 after downloading local models.');
+  await signIn(page, 'reviewer@onecase.demo');
+  await page.getByRole('link', { name: 'Overlap review', exact: true }).click();
+  await page.getByRole('link', { name: /OC-2026-00001/ }).click();
+  await expect(page.getByRole('heading', { name: 'Possible overlap' })).toBeVisible();
+  await expect(page.getByText('Cross-Encoder raw logit')).toBeVisible();
+  await page.getByLabel('Decision', { exact: true }).selectOption('related');
+  await page.getByLabel('Reason', { exact: true }).fill('Both records describe the same withheld tuition refund after timely withdrawal.');
+  await page.getByRole('button', { name: 'Record decision' }).click();
+  await expect(page.getByText('Riya Menon', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Both records describe the same withheld tuition refund after timely withdrawal.')).toBeVisible();
+});
