@@ -61,6 +61,8 @@ jobs:
           .venv/bin/python -m pip install -r backend/requirements-test.txt
       - name: Build frontend
         run: npm run build
+      - name: Verify deployment proxy
+        run: node --test scripts/proxy.test.cjs
       - name: Install test browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
