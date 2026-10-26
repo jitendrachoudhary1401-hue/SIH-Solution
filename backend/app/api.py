@@ -308,6 +308,7 @@ def logout():
 def directory():
     return {"bureaus": [{"id": x.id, "code": x.code, "name": x.name} for x in db.session.scalars(select(Bureau).order_by(Bureau.code))],
             "officers": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role.in_(["officer", "lead"])).order_by(User.name))],
+            "participants": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role != "admin").order_by(User.name))],
             "categories": CATEGORIES,
             "deadline_rules": [{"id": "none", "name": "No automatic deadline"}, {"id": "demo-business-v1", "name": "Illustrative: 10 business days · Mon–Fri, 09–17 IST"}, {"id": "demo-elapsed-v1", "name": "Illustrative: 14 elapsed days"}]}
 

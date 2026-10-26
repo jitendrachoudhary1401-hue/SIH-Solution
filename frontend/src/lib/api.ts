@@ -15,7 +15,7 @@ export type Case = {
 };
 export type Event = { id: number; complaint_id: number; reference: string; actor: string; kind: string; summary: string; reason: string; changes: Record<string, unknown>; outcome: string; severity: string; created_at: string };
 export type Page<T> = { items: T[]; nextCursor: number | null; total: number; asOf: string };
-export type Directory = { bureaus: { id: number; code: string; name: string }[]; officers: User[]; categories: string[]; deadline_rules: {id: string; name: string}[] };
+export type Directory = { bureaus: { id: number; code: string; name: string }[]; officers: User[]; participants: User[]; categories: string[]; deadline_rules: {id: string; name: string}[] };
 export type Pair = { id: number; a: Case; b: Case; state: string; band: string; version: number; stale: boolean; can_review?: boolean;
   evidence: { hybrid: number; cosine: number; reranker_raw: number; signals: Record<string, number>; truncated: boolean; shared_terms: string[]; explanation: string; bundle: { scoring_version: string; validated: boolean; top_k: number; embedding: { model: string; revision: string }; reranker: { model: string; revision: string } }; revisions: Record<string, number> };
   reviews?: { id: number; reviewer: string; decision: string; reason: string; created_at: string }[] };
