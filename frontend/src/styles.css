@@ -88,6 +88,8 @@ small { font-size: 13px; color: var(--muted); }
 .nav-link.active { border-left-color: #9c482e; background: #e9d8c4; color: #803e29; font-weight: 650; }
 .nav-dot { width: 5px; height: 5px; background: #ab7546; border-radius: 50%; margin-left: auto; }
 .sidebar-bottom { margin-top: auto; }
+.sidebar nav { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.sidebar>.brand,.sidebar>.workspace,.sidebar>.nav-label,.sidebar>.sidebar-bottom { flex-shrink: 0; }
 .demo-note { margin: 26px 0 15px; padding: 15px 12px; background: #f8f1e8; border-top: 2px solid #bd9d72; }
 .demo-note>svg { color: #a67e48; margin-bottom: 7px; }
 .demo-note strong { display: block; font-size: 13px; font-weight: 650; }
