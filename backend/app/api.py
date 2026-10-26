@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 from .auth import authenticated, case_or_404, check_version, digest, scope
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
-                     Pair, Review, Idempotency, MatchingRun)
+                     Pair, Review, Idempotency, MatchingRun, SLAPause)
 
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
@@ -38,6 +38,7 @@ class Registration(Input):
     received_at: datetime
     due_at: datetime | None = None
     deadline_reason: str = Field(default="", max_length=1000)
+    deadline_rule: str = "none"
     next_action: str = Field(min_length=3, max_length=500)
 
     @field_validator("received_at", "due_at")
@@ -103,6 +104,8 @@ def institution_json(inst):
 def condition(case):
     if case.status == "disposed":
         return "closed"
+    if case.paused_at:
+        return "paused"
     if not case.due_at:
         return "not_set"
     due = case.due_at.replace(tzinfo=timezone.utc)
@@ -115,6 +118,7 @@ def case_json(case, detail=False):
               "bureau": case.bureau.code, "bureau_id": case.bureau_id, "owner": case.owner.name,
               "owner_id": case.owner_id, "received_at": iso(case.received_at), "due_at": iso(case.due_at),
               "deadline_condition": condition(case), "deadline_policy": case.deadline_policy,
+              "deadline_config": case.deadline_config, "paused_at": iso(case.paused_at),
               "next_action": case.next_action, "version": case.version, "content_revision": case.content_revision,
               "matching_state": case.matching_state, "matching_error": case.matching_error}
     if detail:
@@ -155,7 +159,7 @@ def notify(user_id, case, kind, message, key):
         db.session.add(Notification(user_id=user_id, complaint_id=case.id, kind=kind, message=message, dedup_key=key))
 
 
-def filtered_cases():
+def filtered_cases(receipt_dates=True):
     query = select(Complaint).join(Institution).where(scope())
     filters = request.args
     if filters.get("q"):
@@ -165,7 +169,7 @@ def filtered_cases():
                         ("category", Complaint.category), ("region", Institution.region)]:
         if filters.get(key):
             query = query.where(column == filters[key])
-    for key, sign in [("from", "start"), ("to", "end")]:
+    for key, sign in ([("from", "start"), ("to", "end")] if receipt_dates else []):
         if filters.get(key):
             try:
                 value = datetime.fromisoformat(filters[key]).replace(tzinfo=timezone.utc)
@@ -186,8 +190,8 @@ def page(query, serializer, model):
     except ValueError:
         abort(422, description="Invalid pagination.")
     total = db.session.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
-    records = db.session.scalars(query.where(model.id < cursor) if cursor else query).all()
-    records = records[:limit + 1]
+    query = query.where(model.id < cursor) if cursor else query
+    records = db.session.scalars(query.limit(limit + 1)).all()
     return {"items": [serializer(item) for item in records[:limit]], "total": total,
             "nextCursor": records[limit - 1].id if len(records) > limit else None,
             "asOf": iso(now()), "filters": request.args.to_dict()}
@@ -255,7 +259,8 @@ def logout():
 def directory():
     return {"bureaus": [{"id": x.id, "code": x.code, "name": x.name} for x in db.session.scalars(select(Bureau).order_by(Bureau.code))],
             "officers": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role.in_(["officer", "lead"])).order_by(User.name))],
-            "categories": CATEGORIES}
+            "categories": CATEGORIES,
+            "deadline_rules": [{"id": "none", "name": "No automatic deadline"}, {"id": "demo-business-v1", "name": "Illustrative: 10 business days · Mon–Fri, 09–17 IST"}, {"id": "demo-elapsed-v1", "name": "Illustrative: 14 elapsed days"}]}
 
 
 @api.get("/institutions")
@@ -302,6 +307,10 @@ def register_case():
         abort(422, description="Receipt date cannot be in the future.")
     if data.due_at and (data.due_at <= data.received_at or len(data.deadline_reason) < 5):
         abort(422, description="An explicit deadline must follow receipt and have a recorded reason.")
+    if data.deadline_rule not in ("none", "demo-business-v1", "demo-elapsed-v1"):
+        abort(422, description="Invalid deadline rule.")
+    if data.due_at and data.deadline_rule != "none":
+        abort(422, description="Choose either an illustrative rule or an explicit deadline.")
     institution = db.session.get(Institution, data.institution_id)
     owner = db.session.get(User, data.owner_id)
     if not institution or not owner or not owner.active or owner.bureau_id != g.user.bureau_id or owner.role not in ("officer", "lead"):
@@ -323,6 +332,15 @@ def register_case():
                      due_at=data.due_at, deadline_policy="Authorized explicit deadline v1" if data.due_at else "Deadline not set",
                      next_action=data.next_action)
     db.session.add(case)
+    if data.deadline_rule != "none":
+        from .sla import calculate
+        mode = "business" if data.deadline_rule == "demo-business-v1" else "elapsed"
+        minutes = 10 * 8 * 60 if mode == "business" else 14 * 24 * 60
+        case.deadline_config = {"mode": mode, "minutes": minutes, "version": data.deadline_rule, "timezone": "Asia/Kolkata", "holidays": [], "working_hours": "09:00–17:00", "weekdays": "Mon–Fri", "illustrative": True}
+        case.due_at = calculate(data.received_at, minutes, mode)
+        case.deadline_policy = f"Illustrative {mode} policy {data.deadline_rule}"
+    elif data.due_at:
+        case.deadline_config = {"mode": "elapsed", "minutes": (data.due_at - data.received_at).total_seconds() / 60, "version": "explicit-v1", "timezone": "Asia/Kolkata"}
     db.session.flush()
     db.session.add(Assignment(complaint_id=case.id, bureau_id=case.bureau_id, owner_id=case.owner_id, reason="Initial registration"))
     db.session.add(Idempotency(user_id=g.user.id, key=key, digest=payload_digest, complaint_id=case.id))
@@ -339,6 +357,7 @@ def detail(case_id):
     result = case_json(case, True)
     result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id))]
     result["transfers"] = [{"id": t.id, "to_owner_id": t.to_owner_id, "created_at": iso(t.created_at), "acknowledged_at": iso(t.acknowledged_at)} for t in db.session.scalars(select(Transfer).where(Transfer.complaint_id == case.id).order_by(Transfer.id.desc()))]
+    result["pauses"] = [{"id": p.id, "started_at": iso(p.started_at), "ended_at": iso(p.ended_at), "reason": p.reason} for p in db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id).order_by(SLAPause.id))]
     return result
 
 
@@ -364,6 +383,9 @@ def edit_case(case_id):
                 abort(422, description="A timezone-aware deadline after receipt is required.")
             case.deadline_revision += 1
             case.deadline_policy = "Authorized explicit deadline v1"
+            if case.paused_at:
+                abort(422, description="Resume the SLA clock before revising the deadline.")
+            case.deadline_config = {"mode": "elapsed", "minutes": (value - case.received_at.replace(tzinfo=timezone.utc)).total_seconds() / 60, "version": "explicit-v1", "timezone": "Asia/Kolkata"} if value else {}
         changes[field] = {"before": iso(getattr(case, field)) if field == "due_at" else ("Previous text" if field == "description" else getattr(case, field)),
                           "after": iso(value) if field == "due_at" else ("Revised text" if field == "description" else value)}
         setattr(case, field, value)
@@ -374,6 +396,40 @@ def edit_case(case_id):
         enqueue(case)
     event(case, "updated", "Case details updated", data.reason, changes)
     case.version += 1
+    db.session.commit()
+    return case_json(case, True)
+
+
+@api.post("/complaints/<int:case_id>/sla/<operation>")
+@authenticated
+def sla_clock(case_id, operation):
+    case = case_or_404(case_id, write=True, lead=True)
+    data = parse(Change)
+    check_version(case, data.version)
+    if not case.due_at or case.status == "disposed":
+        abort(422, description="An active case with a deadline is required.")
+    if operation == "pause":
+        if case.paused_at:
+            abort(409, description="The SLA clock is already paused.")
+        case.paused_at = now()
+        db.session.add(SLAPause(complaint_id=case.id, started_at=case.paused_at, reason=data.reason))
+    elif operation == "resume":
+        if not case.paused_at:
+            abort(409, description="The SLA clock is not paused.")
+        pause = db.session.scalar(select(SLAPause).where(SLAPause.complaint_id == case.id, SLAPause.ended_at.is_(None)))
+        pause.ended_at = now()
+        if case.deadline_config:
+            from .sla import calculate
+            pauses = db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id, SLAPause.ended_at.is_not(None))).all()
+            case.due_at = calculate(case.received_at.replace(tzinfo=timezone.utc), case.deadline_config["minutes"], case.deadline_config["mode"], pauses=[(p.started_at.replace(tzinfo=timezone.utc), p.ended_at.replace(tzinfo=timezone.utc)) for p in pauses])
+        else:
+            case.due_at += now() - case.paused_at.replace(tzinfo=timezone.utc)
+        case.paused_at = None
+        case.deadline_revision += 1
+    else:
+        abort(404)
+    case.version += 1
+    event(case, f"sla_{operation}", f"SLA clock {operation} recorded", data.reason)
     db.session.commit()
     return case_json(case, True)
 
@@ -624,7 +680,7 @@ def dashboard():
     active = [c for c in cases if c.status != "disposed"]
     ids = [c.id for c in cases]
     pairs = db.session.scalars(authorized_pairs().where(or_(Pair.case_a_id.in_(ids), Pair.case_b_id.in_(ids)))).all()
-    visible_ids = select(Complaint.id).where(scope())
+    visible_ids = filtered_cases(receipt_dates=False).with_only_columns(Complaint.id)
     # Throughput uses event-period boundaries independently of the receipt-cohort cards.
     from zoneinfo import ZoneInfo
     local = now().astimezone(ZoneInfo("Asia/Kolkata"))

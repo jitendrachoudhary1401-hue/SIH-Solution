@@ -69,6 +69,8 @@ class Complaint(db.Model):
     due_at = db.Column(db.DateTime(timezone=True), index=True)
     deadline_policy = db.Column(db.String(120), nullable=False, default="Illustrative elapsed-time policy v1")
     deadline_revision = db.Column(db.Integer, nullable=False, default=1)
+    deadline_config = db.Column(db.JSON, nullable=False, default=dict)
+    paused_at = db.Column(db.DateTime(timezone=True))
     next_action = db.Column(db.String(500), nullable=False, default="Review the complaint")
     version = db.Column(db.Integer, nullable=False, default=1)
     content_revision = db.Column(db.Integer, nullable=False, default=1)
@@ -215,3 +217,19 @@ class Idempotency(db.Model):
     digest = db.Column(db.String(64), nullable=False)
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
     __table_args__ = (UniqueConstraint("user_id", "key"),)
+
+
+class SLAPause(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    ended_at = db.Column(db.DateTime(timezone=True))
+    reason = db.Column(db.String(2000), nullable=False)
+
+
+class PairScore(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pair_id = db.Column(db.Integer, db.ForeignKey("pair.id"), nullable=False)
+    run_id = db.Column(db.Integer, db.ForeignKey("matching_run.id"), nullable=False)
+    evidence = db.Column(db.JSON, nullable=False)
+    __table_args__ = (UniqueConstraint("pair_id", "run_id"),)

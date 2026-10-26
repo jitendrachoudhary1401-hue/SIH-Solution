@@ -9,7 +9,7 @@ import unicodedata
 from pathlib import Path
 from flask import current_app
 from sqlalchemy import select
-from .models import db, Complaint, Embedding, MatchingRun, Pair, now
+from .models import db, Complaint, Embedding, MatchingRun, Pair, PairScore, now
 
 
 def normalize(text):
@@ -158,6 +158,7 @@ def process(case_id, revision, models=None):
             pair = Pair(case_a_id=a, case_b_id=b, run_id=run.id, evidence=evidence, band=band)
             db.session.add(pair)
         db.session.flush()
+        db.session.add(PairScore(pair_id=pair.id, run_id=run.id, evidence=evidence))
         if band != "low":
             for reviewer in db.session.scalars(select(User).where(User.role == "reviewer", User.active.is_(True))):
                 granted = set(db.session.scalars(select(Grant.complaint_id).where(Grant.user_id == reviewer.id, Grant.complaint_id.in_([a, b]))))
