@@ -27,7 +27,7 @@ def create_app(config=None):
         SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", "sqlite:///" + (runtime / "onecase.db").as_posix()),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
-        STORAGE_PATH=str(runtime / "documents"),
+        STORAGE_PATH=os.getenv("STORAGE_PATH", str(runtime / "documents")),
         COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
         MODEL_PATH=os.getenv("MODEL_PATH", str(root / ".runtime" / "models")),
         FRONTEND_PATH=str(root / "frontend" / "dist"),

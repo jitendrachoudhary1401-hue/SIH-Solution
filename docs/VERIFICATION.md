@@ -4,6 +4,8 @@ This file records observable checks for the local implementation, not production
 
 ## Backend
 
+Latest completed suite: **16 tests passed**. Production frontend: TypeScript and Vite build passed. Browser suite with real-model matching enabled: **4 tests passed** (30.4 seconds before the final responsive-date-field adjustment).
+
 The pytest suite checks sessions/expiry/logout/CSRF, same-origin writes, rate limits, bureau and owner authorization, administrator denial, idempotent creation and rollback, stale versions, lifecycle transitions, scoped counts/export/pagination, protected uploads/downloads, atomic transfer/acknowledgement, deduplicated monitoring, SLA arithmetic/pauses, worker failure without a baseline fallback, persisted matching evidence/review decisions, and database/evidence backup restoration.
 
 Deterministic injected model doubles isolate pipeline transaction tests. Separate evaluation and browser tests use the actual downloaded embedding and Cross-Encoder models.

@@ -142,3 +142,17 @@ def test_sla_pause_resume(client):
     assert paused.status_code == 200 and paused.json["deadline_condition"] == "paused"
     resumed = client.post("/api/complaints/1/sla/resume", headers=headers, json={"version": paused.json["version"], "reason": "Document access has been restored"})
     assert resumed.status_code == 200 and resumed.json["paused_at"] is None
+
+
+def test_episode_metrics_distinguish_reopened_cycles(client):
+    headers = login(client)
+    case = client.get("/api/complaints/1").json
+    for state in ["disposed", "under_review", "disposed"]:
+        response = client.post("/api/complaints/1/status", headers=headers, json={"version": case["version"], "status": state, "reason": "Documented lifecycle episode test"})
+        assert response.status_code == 200
+        case = response.json
+    metrics = client.get("/api/reports/metrics?institution=1").json
+    assert metrics["disposed_episodes"] == 2
+    assert metrics["sla_eligible_episodes"] == 2
+    assert metrics["sla_excluded_episodes"] == 0
+    assert metrics["sla_compliance"] == 0  # Seeded case deadline is overdue.
