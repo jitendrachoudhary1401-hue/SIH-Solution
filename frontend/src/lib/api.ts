@@ -1,4 +1,4 @@
-export type User = { id: number; name: string; email: string; role: string; bureau_id: number | null; bureau: string };
+export type User = { id: number; name: string; email: string; role: string; bureau_id: number | null; bureau: string; roles: string[]; capabilities: Record<string, boolean> };
 export type Institution = { id: number; name: string; external_id: string | null; verified: boolean; region: string; address: string };
 export type Case = {
   id: number; reference: string; institution: Institution; category: string; description?: string;
@@ -7,7 +7,10 @@ export type Case = {
   next_action: string; version: number; content_revision: number; matching_state: string; matching_error: string | null;
   paused_at: string | null; deadline_config: Record<string, unknown>; pauses?: {id: number; started_at: string; ended_at: string | null; reason: string}[];
   can_edit?: boolean; can_transfer?: boolean; allowed_transitions?: string[];
-  attachments?: { id: number; filename: string; size: number; checksum: string }[];
+  can_transition?: boolean; can_route?: boolean; can_proceeding?: boolean; can_compliance?: boolean; can_export?: boolean; can_read_documents?: boolean;
+  issue_summary: string; complainant_type: string; source_channel: string; source_reference: string; entered_at: string;
+  affected_person?: string; submitter_name?: string; representation_basis?: string; prior_proceedings?: string;
+  attachments?: { id: number; filename: string; size: number; checksum: string; proceeding_id: number | null; scan_state: string; scan_detail: string | null }[];
   transfers?: { id: number; to_owner_id: number; created_at: string; acknowledged_at: string | null }[];
 };
 export type Event = { id: number; complaint_id: number; reference: string; actor: string; kind: string; summary: string; reason: string; changes: Record<string, unknown>; outcome: string; severity: string; created_at: string };
@@ -17,7 +20,7 @@ export type Pair = { id: number; a: Case; b: Case; state: string; band: string; 
   evidence: { hybrid: number; cosine: number; reranker_raw: number; signals: Record<string, number>; truncated: boolean; shared_terms: string[]; explanation: string; bundle: { scoring_version: string; validated: boolean; top_k: number; embedding: { model: string; revision: string }; reranker: { model: string; revision: string } }; revisions: Record<string, number> };
   reviews?: { id: number; reviewer: string; decision: string; reason: string; created_at: string }[] };
 export type Summary = { total: number; active: number; overdue: number; pending_pairs: number; confirmed_pairs: number; attention: Case[]; recent: Event[]; trend: { week: string; received: number; disposed: number }[]; asOf: string; policy: string; ageing: { label: string; count: number }[]; matching: { queued: number; failed: number } };
-export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+export class ApiError extends Error { constructor(message: string, public status: number, public mfaRequired = false) { super(message); } }
 let csrf = '';
 export function setCsrf(value: string) { csrf = value; }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -26,7 +29,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== '/auth/login' && path !== '/auth/me') window.dispatchEvent(new CustomEvent('session-expired'));
-    throw new ApiError(data.error?.message || `Request failed (${response.status})`, response.status);
+    throw new ApiError(data.error?.message || `Request failed (${response.status})`, response.status, !!data.error?.mfa_required);
   }
   return data;
 }
