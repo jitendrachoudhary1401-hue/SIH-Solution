@@ -46,7 +46,7 @@ def create_app(config=None):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {}
     Path(app.config["STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
-    Migrate(app, db)
+    Migrate(app, db, directory=str(root / "backend" / "migrations"))
     from .api import api
     from .cli import register
     app.register_blueprint(api, url_prefix="/api")
