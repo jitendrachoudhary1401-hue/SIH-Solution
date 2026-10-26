@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, UniqueConstraint, MetaData
+from sqlalchemy import CheckConstraint, UniqueConstraint, MetaData, ForeignKeyConstraint
+from uuid import uuid4
 
-db = SQLAlchemy(metadata=MetaData(naming_convention={"fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"}))
+db = SQLAlchemy(metadata=MetaData(naming_convention={"ix": "ix_%(column_0_label)s", "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"}))
 
 
 def now():
@@ -99,6 +100,7 @@ class Complaint(db.Model):
     owner = db.relationship(User)
     __mapper_args__ = {"version_id_col": version}
     __table_args__ = (
+        UniqueConstraint("id", "institution_id", name="uq_complaint_id_institution"),
         CheckConstraint("status IN ('received','under_review','awaiting_information','disposed')"),
         CheckConstraint("priority IN ('low','normal','high','urgent')"),
     )
@@ -170,6 +172,7 @@ class Attachment(db.Model):
     scan_checked_at = db.Column(db.DateTime(timezone=True))
     scan_detail = db.Column(db.String(300))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (UniqueConstraint("id", "complaint_id", name="uq_attachment_id_complaint"),)
 
 
 class Notification(db.Model):
@@ -207,6 +210,7 @@ class MatchingRun(db.Model):
 class Embedding(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    issue_id = db.Column(db.String(36), db.ForeignKey("complaint_issue.id"))
     revision = db.Column(db.Integer, nullable=False)
     model = db.Column(db.String(250), nullable=False)
     digest = db.Column(db.String(64), nullable=False)
@@ -442,3 +446,236 @@ class DispatchPacket(db.Model):
     acknowledgement_reference = db.Column(db.String(200))
     version = db.Column(db.Integer, nullable=False, default=1)
     __mapper_args__ = {"version_id_col": version}
+
+
+def opaque_id():
+    return str(uuid4())
+
+
+class Person(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    display_name = db.Column(db.String(150), nullable=False, index=True)
+    record_state = db.Column(db.String(30), nullable=False, default="provisional")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, onupdate=now)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    __mapper_args__ = {"version_id_col": version}
+
+
+class Location(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    country = db.Column(db.String(80), nullable=False, default="")
+    state = db.Column(db.String(80), nullable=False, default="")
+    district = db.Column(db.String(100), nullable=False, default="")
+    city = db.Column(db.String(100), nullable=False, default="")
+    locality = db.Column(db.String(150), nullable=False, default="")
+    postal_information = db.Column(db.String(100), nullable=False, default="")
+    code_system = db.Column(db.String(80))
+    official_code = db.Column(db.String(80))
+    geographic_level = db.Column(db.String(40))
+    source = db.Column(db.String(300), nullable=False)
+    verification_state = db.Column(db.String(30), nullable=False, default="self_declared")
+    __table_args__ = (UniqueConstraint("code_system", "geographic_level", "official_code", name="uq_location_scoped_official_code"),)
+
+
+class Campus(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    institution_id = db.Column(db.Integer, db.ForeignKey("institution.id"), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    location_id = db.Column(db.String(36), db.ForeignKey("location.id"))
+    verification_state = db.Column(db.String(30), nullable=False, default="unverified")
+    source = db.Column(db.String(300), nullable=False)
+    __table_args__ = (UniqueConstraint("id", "institution_id", name="uq_campus_id_institution"),)
+
+
+class IdentityIssuer(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    name = db.Column(db.String(200), nullable=False)
+    namespace = db.Column(db.String(100), nullable=False, unique=True)
+    institution_id = db.Column(db.Integer, db.ForeignKey("institution.id"))
+    source = db.Column(db.String(300), nullable=False)
+
+
+class PersonContact(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False, index=True)
+    kind = db.Column(db.String(30), nullable=False)
+    value_ciphertext = db.Column(db.Text, nullable=False)
+    purpose = db.Column(db.String(200), nullable=False)
+    source = db.Column(db.String(300), nullable=False)
+    state = db.Column(db.String(30), nullable=False, default="pending")
+    method = db.Column(db.String(100))
+    checked_at = db.Column(db.DateTime(timezone=True))
+    expires_at = db.Column(db.DateTime(timezone=True))
+    revoked_at = db.Column(db.DateTime(timezone=True))
+
+
+class IdentityClaim(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False, index=True)
+    issuer_id = db.Column(db.String(36), db.ForeignKey("identity_issuer.id"), nullable=False)
+    namespace = db.Column(db.String(100), nullable=False)
+    kind = db.Column(db.String(40), nullable=False)
+    identifier_ciphertext = db.Column(db.Text, nullable=False)
+    identifier_digest = db.Column(db.String(64), nullable=False, index=True)
+    source = db.Column(db.String(300), nullable=False)
+    attachment_id = db.Column(db.Integer, db.ForeignKey("attachment.id"))
+    valid_from = db.Column(db.DateTime(timezone=True))
+    valid_until = db.Column(db.DateTime(timezone=True))
+    state = db.Column(db.String(30), nullable=False, default="needs_review")
+    __table_args__ = (CheckConstraint("valid_until IS NULL OR valid_from IS NULL OR valid_until >= valid_from", name="ck_identity_claim_valid_range"),)
+
+
+class IdentityVerification(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    claim_id = db.Column(db.String(36), db.ForeignKey("identity_claim.id"))
+    contact_id = db.Column(db.String(36), db.ForeignKey("person_contact.id"))
+    check_type = db.Column(db.String(60), nullable=False)
+    method = db.Column(db.String(100), nullable=False)
+    outcome = db.Column(db.String(30), nullable=False)
+    evidence_id = db.Column(db.Integer, db.ForeignKey("attachment.id"))
+    reference = db.Column(db.String(300), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    expires_at = db.Column(db.DateTime(timezone=True))
+    reason = db.Column(db.String(2000), nullable=False)
+    supersedes_id = db.Column(db.String(36), db.ForeignKey("identity_verification.id"))
+
+
+class PersonLocation(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False)
+    location_id = db.Column(db.String(36), db.ForeignKey("location.id"), nullable=False)
+    relationship = db.Column(db.String(40), nullable=False)
+    effective_from = db.Column(db.DateTime(timezone=True), nullable=False)
+    effective_until = db.Column(db.DateTime(timezone=True))
+    source = db.Column(db.String(300), nullable=False)
+    checked = db.Column(db.Boolean, nullable=False, default=False)
+    __table_args__ = (CheckConstraint("effective_until IS NULL OR effective_until >= effective_from", name="ck_person_location_valid_range"),)
+
+
+class ComplaintParticipant(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False, index=True)
+    person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False)
+    role = db.Column(db.String(40), nullable=False)
+    source = db.Column(db.String(300), nullable=False)
+    valid_from = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    expires_at = db.Column(db.DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("complaint_id", "person_id", "role", name="uq_complaint_person_role"),)
+
+
+class RepresentativeAuthorization(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    representative_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False)
+    represented_person_id = db.Column(db.String(36), db.ForeignKey("person.id"), nullable=False)
+    basis = db.Column(db.String(1000), nullable=False)
+    evidence_id = db.Column(db.Integer, db.ForeignKey("attachment.id"))
+    valid_from = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    expires_at = db.Column(db.DateTime(timezone=True))
+    revoked_at = db.Column(db.DateTime(timezone=True))
+    disclosure_scope = db.Column(db.String(500), nullable=False)
+    __table_args__ = (CheckConstraint("representative_id <> represented_person_id", name="ck_representative_distinct_person"),)
+
+
+class ComplaintSource(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False, index=True)
+    namespace = db.Column(db.String(100), nullable=False)
+    reference = db.Column(db.String(150), nullable=False)
+    original_received_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    imported_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    payload_digest = db.Column(db.String(64), nullable=False)
+    provenance = db.Column(db.String(500), nullable=False)
+    guaranteed_record_key = db.Column(db.String(64), unique=True)
+
+
+class ComplaintIssue(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    complaint_id = db.Column(db.Integer, nullable=False, index=True)
+    institution_id = db.Column(db.Integer, nullable=False)
+    category = db.Column(db.String(80), nullable=False)
+    subcategory = db.Column(db.String(100), nullable=False, default="")
+    summary = db.Column(db.String(300), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    campus_id = db.Column(db.String(36))
+    incident_location_id = db.Column(db.String(36), db.ForeignKey("location.id"))
+    incident_start = db.Column(db.DateTime(timezone=True))
+    incident_end = db.Column(db.DateTime(timezone=True))
+    incident_precision = db.Column(db.String(20), nullable=False, default="unknown")
+    requested_relief = db.Column(db.String(2000), nullable=False, default="")
+    state = db.Column(db.String(30), nullable=False, default="open")
+    revision = db.Column(db.Integer, nullable=False, default=1)
+    source = db.Column(db.String(300), nullable=False)
+    __mapper_args__ = {"version_id_col": revision}
+    __table_args__ = (
+        UniqueConstraint("id", "complaint_id", name="uq_issue_id_complaint"),
+        ForeignKeyConstraint(["complaint_id", "institution_id"], ["complaint.id", "complaint.institution_id"], name="fk_issue_case_institution"),
+        ForeignKeyConstraint(["campus_id", "institution_id"], ["campus.id", "campus.institution_id"], name="fk_issue_campus_institution"),
+        CheckConstraint("incident_end IS NULL OR incident_start IS NULL OR incident_end >= incident_start", name="ck_issue_incident_range"),
+        CheckConstraint("incident_precision IN ('unknown','day','month','year','range')", name="ck_issue_incident_precision"),
+    )
+
+
+class IssueEvidence(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    issue_id = db.Column(db.String(36), nullable=False)
+    complaint_id = db.Column(db.Integer, nullable=False)
+    attachment_id = db.Column(db.Integer, nullable=False)
+    relevance_note = db.Column(db.String(1000), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (
+        ForeignKeyConstraint(["issue_id", "complaint_id"], ["complaint_issue.id", "complaint_issue.complaint_id"], name="fk_issue_evidence_case"),
+        ForeignKeyConstraint(["attachment_id", "complaint_id"], ["attachment.id", "attachment.complaint_id"], name="fk_issue_evidence_attachment_case"),
+        UniqueConstraint("issue_id", "attachment_id", name="uq_issue_evidence"),
+    )
+
+
+class IncidentRecord(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    institution_id = db.Column(db.Integer, db.ForeignKey("institution.id"), nullable=False)
+    summary = db.Column(db.String(300), nullable=False)
+    reviewer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    basis = db.Column(db.String(2000), nullable=False)
+    uncertainty = db.Column(db.String(1000), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
+class IssueIncidentLink(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    issue_id = db.Column(db.String(36), db.ForeignKey("complaint_issue.id"), nullable=False)
+    incident_id = db.Column(db.String(36), db.ForeignKey("incident_record.id"), nullable=False)
+    reviewer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    basis = db.Column(db.String(2000), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    revoked_at = db.Column(db.DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("issue_id", "incident_id", name="uq_issue_incident"),)
+
+
+class IssuePairFinding(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    pair_id = db.Column(db.Integer, db.ForeignKey("pair.id"), nullable=False, index=True)
+    issue_a_id = db.Column(db.String(36), db.ForeignKey("complaint_issue.id"), nullable=False)
+    issue_b_id = db.Column(db.String(36), db.ForeignKey("complaint_issue.id"), nullable=False)
+    run_id = db.Column(db.Integer, db.ForeignKey("matching_run.id"), nullable=False)
+    evidence = db.Column(db.JSON, nullable=False)
+    state = db.Column(db.String(30), nullable=False, default="pending")
+    relation_kind = db.Column(db.String(40))
+    version = db.Column(db.Integer, nullable=False, default=1)
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (UniqueConstraint("pair_id", "issue_a_id", "issue_b_id", name="uq_case_issue_pair"), CheckConstraint("issue_a_id <> issue_b_id", name="ck_distinct_issue_pair"))
+
+
+class IssueReview(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=opaque_id)
+    finding_id = db.Column(db.String(36), db.ForeignKey("issue_pair_finding.id"), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    decision = db.Column(db.String(30), nullable=False)
+    relation_kind = db.Column(db.String(40))
+    reason = db.Column(db.String(2000), nullable=False)
+    revisions = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
