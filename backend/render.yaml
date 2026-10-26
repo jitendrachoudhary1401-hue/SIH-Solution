@@ -2,9 +2,10 @@ services:
   - type: web
     name: onecase-api
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt
-    preDeployCommand: python backend/migrate.py
-    startCommand: python backend/serve.py
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python migrate.py
+    startCommand: python serve.py
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -29,13 +30,13 @@ services:
         sync: false
       - key: DATABASE_URL_UNPOOLED
         sync: false
-      - key: AWS_ACCESS_KEY_ID
+      - key: NEON_STORAGE_ACCESS_KEY_ID
         sync: false
-      - key: AWS_SECRET_ACCESS_KEY
+      - key: NEON_STORAGE_SECRET_ACCESS_KEY
         sync: false
-      - key: AWS_ENDPOINT_URL_S3
+      - key: NEON_STORAGE_ENDPOINT
         sync: false
-      - key: AWS_REGION
+      - key: NEON_STORAGE_REGION
         sync: false
       - key: RATE_LIMIT_STORAGE_URI
         sync: false

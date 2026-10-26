@@ -57,3 +57,18 @@ Neon provisions backend services. It does not publish this React application on 
 ## Intended application branch migration
 
 After validation, the same committed migration chain was applied to the initially empty `production` database. Output: `Database migration completed.` Synthetic test accounts were seeded only in the isolated validation branch, not in the intended application branch.
+
+## Final local checks
+
+```text
+npm run build                 PASS
+pytest backend/tests -q       23 passed
+node --test scripts/proxy.test.cjs
+                              3 passed, 0 failed
+playwright test               3 passed, 1 optional model test skipped
+API health                    HTTP 200
+Frontend sign-in page         HTTP 200
+Frontend secret-value scan    PASS (3 compiled JavaScript bundles)
+```
+
+The first browser run found a larger-text sidebar overflow that put Sign out below the viewport. Navigation now scrolls within the fixed sidebar; the full officer workflow passed after the fix. A PowerShell HTML-parser error during the page check was bypassed by verifying the same endpoint with Python's HTTP client, which returned HTTP 200. Generated test screenshots, caches and temporary skill-download copies were removed after verification; source, environments, database files and local model artifacts were retained.

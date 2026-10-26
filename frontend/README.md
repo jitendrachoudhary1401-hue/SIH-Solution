@@ -4,12 +4,11 @@ React, TypeScript and Vite provide the officer workspace. The interface is **lig
 
 ## Local setup
 
-From the repository root:
+From the `frontend` folder (it deploys independently of the repository root):
 
 ```powershell
 npm ci
-npm --prefix frontend ci
-Copy-Item frontend/.env.example frontend/.env.local
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
@@ -22,14 +21,14 @@ Start the Flask backend in a second terminal using [the backend guide](../backen
 | `FRONTEND_HOST` | Vite dev server | `127.0.0.1` |
 | `FRONTEND_PORT` | Vite dev server | `5173` |
 
-Only `VITE_*` variables are intentionally exposed to browser code. **Never put database URLs, Neon keys, AWS credentials, Redis credentials, or MFA secrets in a `VITE_*` variable.**
+Only `VITE_*` variables are intentionally exposed to browser code. **Never put database URLs, Neon storage keys, Redis credentials, or MFA secrets in a `VITE_*` variable.**
 
 ## Deploy to Vercel
 
 1. Import the GitHub repository in Vercel.
-2. Set **Root Directory to the repository root**, not `frontend`. The root contains the server-only API proxy and `vercel.json`.
+2. Set **Root Directory to `frontend`**. Both `api/proxy.js` and `vercel.json` are inside this folder; deployment requires no files outside it.
 3. Select the Other framework preset if Vercel asks. The committed config supplies build/output settings.
-4. Use Node.js 24. Build command: `npm run build`. Output directory: `frontend/dist`.
+4. Use Node.js 24. Install command: `npm ci`. Build command: `npm run build`. Output directory: `dist`.
 5. Add the following project environment values yourself:
 
 | Vercel variable | Value |
@@ -50,12 +49,11 @@ Keep individual uploads within the backend's deployed limit (default 3 MiB) and 
 
 ```powershell
 npm run build
-Set-Location frontend
 npx playwright install chromium
 npm run test:e2e
 ```
 
-Browser tests start a disposable local backend and use synthetic data. No Neon credentials are required. The test host injects a scanner fixture; it is not a real malware scan or a production scanner configuration. Enable `E2E_MATCHING=1` only after installing local model dependencies/artifacts to also test actual semantic matching.
+Browser tests require the full workspace checkout and a Python test environment in the root `.venv`; they start a disposable local backend and use synthetic data. Deployment and `npm run build` require only this frontend folder. No Neon credentials are required by browser tests. The test host injects a scanner fixture; it is not a real malware scan or a production scanner configuration. Enable `E2E_MATCHING=1` only after installing local model dependencies/artifacts to also test actual semantic matching.
 
 ## Troubleshooting
 

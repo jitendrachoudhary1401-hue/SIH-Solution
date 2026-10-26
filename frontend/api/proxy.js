@@ -2,7 +2,7 @@
 // Same-origin cookies avoid cross-site cookie failures between Vercel and Render.
 const MAX_BODY = 4 * 1024 * 1024;
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const configured = process.env.BACKEND_URL;
   if (!configured) return res.status(503).json({error:{message:'Backend connection is not configured.'}});
   let base;

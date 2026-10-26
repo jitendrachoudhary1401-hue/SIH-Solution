@@ -1,31 +1,22 @@
 # Verification record
 
-This file records observable checks for the local implementation, not production certification.
+Updated 27 October 2026. These checks describe the local/synthetic implementation and service setup, not production certification.
 
-## Backend
+| Check | Actual result |
+| --- | --- |
+| Root `npm run build` | Passed: TypeScript + Vite production assets |
+| Backend pytest | 23 passed |
+| Server-only Vercel proxy tests | 3 passed |
+| Browser suite | 3 passed; optional real-model test skipped in the last run |
+| Running app | `/api/health` and `/officer/login` returned HTTP 200 |
+| Neon migrations | Three migrations passed on validation branch, then on the initially empty intended application branch |
+| Real Neon service flow | Pooled connection, authentication, complaint persistence, private-object/checksum round trip, quarantine denial and cross-bureau denial passed |
+| Frontend credential scan | No configured server secret values found in three compiled JavaScript bundles |
 
-Latest completed suite: **16 tests passed**. Production frontend: TypeScript and Vite build passed. Browser suite with real-model matching enabled: **4 tests passed** (30.4 seconds before the final responsive-date-field adjustment).
+Backend tests include authorization, sessions, expiry, CSRF, idempotency, stale versions, transfer ownership, lifecycle episodes, protected evidence, backups, matching failure behavior, expiring grants/appointments, case conflicts, independent compliance verification, one-time MFA recovery and missing-scanner quarantine. The rate-limit test confirms that an excess sign-in request returns 429 before any database statement executes.
 
-The pytest suite checks sessions/expiry/logout/CSRF, same-origin writes, rate limits, bureau and owner authorization, administrator denial, idempotent creation and rollback, stale versions, lifecycle transitions, scoped counts/export/pagination, protected uploads/downloads, atomic transfer/acknowledgement, deduplicated monitoring, SLA arithmetic/pauses, worker failure without a baseline fallback, persisted matching evidence/review decisions, and database/evidence backup restoration.
+Browser checks cover the officer registration/action/disposal/reopening/transfer/acknowledgement journey, warm light-only styling, larger body text, responsive navigation, action history and direct API denial. Test files are synthetic. The browser test host uses a scanner double; that is not evidence of a deployed malware scanner.
 
-Deterministic injected model doubles isolate pipeline transaction tests. Separate evaluation and browser tests use the actual downloaded embedding and Cross-Encoder models.
+Earlier local model inference produced a high relevance suggestion for the two seeded fee-refund complaints and low relevance for their comparisons with the unrelated laboratory complaint. The separate tiny synthetic held-out evaluation is recorded in `evaluation.json`; it is not an operational accuracy estimate, a multilingual validation or a 10,000-case load test.
 
-## Real-model demonstration
-
-The eight-record local seed produced:
-
-| Pair | Actual hybrid score | Band |
-| --- | --- | --- |
-| Fee-refund complaints 1 / 2 | 0.903 | High relevance; human review required |
-| Fee-refund / laboratory complaints 1 / 3 | 0.202 | Low |
-| Fee-refund / laboratory complaints 2 / 3 | 0.210 | Low |
-
-The unverified institution's complaint exposes a failed processing state; the worker does not establish institution identity by similar name. These results describe synthetic examples only. Full model revisions, configuration, latency and small held-out comparison metrics are in `evaluation.json` and local database run records.
-
-## Browser verification
-
-Playwright covers sign-in, registration with a business calendar, case action/history, disposal and reopening, cross-bureau transfer, recipient acknowledgement, navigation, dark theme, expanding history, institution history, direct API denial, mobile navigation focus/escape handling, and no document overflow at 360/768/1440px. With `E2E_MATCHING=1`, the reviewer comparison and related-decision journey uses real model outputs.
-
-## Operational limits
-
-Local tests use SQLite. PostgreSQL/Compose execution, concurrent-worker guarantees, PostgreSQL backup recovery, multilingual model quality and the proposed 10,000-case latency target have not been verified in this environment. The CSS login decoration works without WebGL. Reduced motion disables animation. Keyboard and responsive checks do not establish complete WCAG 2.2 AA conformance.
+See `NEON_SETUP.md` for provisioning output and a failure/retry account. Render/Vercel publication and GitHub-hosted CI execution remain owner actions. Shared Redis availability, real scanner/parser isolation, production privileged MFA/recovery, HTTPS configuration, encryption/retention policies and real-data operational release gates still require deployment-specific evidence.

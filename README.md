@@ -11,6 +11,8 @@ An officer workspace for accountable institution-complaint coordination. The app
 | Rate limits | In-memory local limits; shared Redis required in production |
 | Worker | Local semantic matching, deadline alerts and quarantine processing |
 
+Deploy **only `frontend` to Vercel** and **only `backend` to Render**, using those folders as each platform's Root Directory. Deployment configs live in `frontend/vercel.json` and `backend/render.yaml`. No separate AWS account or service is required or provisioned.
+
 ## Setup guides
 
 - [Complete setup and deployment](SETUP_GUIDE.md)

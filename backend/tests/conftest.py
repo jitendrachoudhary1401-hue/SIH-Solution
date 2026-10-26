@@ -10,7 +10,8 @@ from app.cli import seed_demo
 
 @pytest.fixture
 def app(tmp_path):
-    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents"), "STORAGE_BACKEND": "local", "RATELIMIT_ENABLED": False})
+    from cryptography.fernet import Fernet
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents"), "STORAGE_BACKEND": "local", "RATELIMIT_ENABLED": False, "MFA_ENCRYPTION_KEY": Fernet.generate_key().decode()})
     with app.app_context():
         db.create_all()
         seed_demo("TestPassword!2026")

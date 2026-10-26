@@ -11,6 +11,7 @@ backend/.env.local
 .neon
 .neon/
 .runtime/
+backend/.runtime/
 *.pyc
 playwright-report/
 test-results/

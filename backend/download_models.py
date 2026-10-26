@@ -4,7 +4,11 @@ import os
 from pathlib import Path
 from huggingface_hub import HfApi, snapshot_download
 
-root = Path(os.getenv("MODEL_PATH", str(Path(__file__).resolve().parents[1] / ".runtime" / "models")))
+runtime = Path(__file__).resolve().parent / ".runtime"
+legacy_runtime = Path(__file__).resolve().parents[1] / ".runtime"
+if os.getenv("APP_ENV", "development") != "production" and legacy_runtime.exists():
+    runtime = legacy_runtime
+root = Path(os.getenv("MODEL_PATH", str(runtime / "models")))
 root.mkdir(parents=True, exist_ok=True)
 manifest = {}
 for kind, repo in [("embedding", "sentence-transformers/all-MiniLM-L6-v2"), ("reranker", "cross-encoder/ms-marco-MiniLM-L6-v2")]:

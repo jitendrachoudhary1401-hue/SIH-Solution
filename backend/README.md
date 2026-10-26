@@ -7,9 +7,11 @@ Flask/SQLAlchemy own authentication, object/field authorization, transactional c
 Run from the repository root:
 
 ```powershell
+cd backend
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
-Copy-Item backend/.env.example backend/.env
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+# Only on a fresh setup; preserve any existing .env.
+Copy-Item .env.example .env
 ```
 
 The workspace may already contain `backend/.env`; preserve it instead of overwriting it. Generate new secret values locally when setting up another environment:
@@ -25,19 +27,23 @@ Store the first output as `SECRET_KEY` and the second as `MFA_ENCRYPTION_KEY` in
 
 Existing process environment wins. Files fill missing keys in this order:
 
-1. Root `.env.local` — Neon CLI-managed service credentials.
-2. Root `.env`.
-3. `backend/.env.local`.
-4. `backend/.env` — application settings and local secrets.
+1. `backend/.env.local`.
+2. `backend/.env` — application settings and local secrets.
+3. Root `.env.local` — optional Neon CLI-managed values during workspace development.
+4. Root `.env` — optional local fallback.
 
 All these files are ignored by Git. Render receives values through its environment dashboard; it does not need committed dotenv files. The API normalizes `postgresql://`/`postgres://` to SQLAlchemy's existing `postgresql+psycopg://` driver.
+
+The Render-only deployment reads process environment variables and its own `.env` files. Workspace-root env files are optional. Production runtime/model defaults are under `backend/.runtime`; existing local workspace data remains supported for development. Flask does not require the frontend build on Render.
+
+Neon is the file-storage provider; no AWS account or AWS resources are added. For Render, map Neon's CLI-generated `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, and `AWS_REGION` to `NEON_STORAGE_ACCESS_KEY_ID`, `NEON_STORAGE_SECRET_ACCESS_KEY`, `NEON_STORAGE_ENDPOINT`, and `NEON_STORAGE_REGION` respectively. The adapter still accepts the original CLI names as a local compatibility fallback. All values stay private.
 
 | Setting | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Pooled Neon application connection |
 | `DATABASE_URL_UNPOOLED` | Direct connection for Alembic migrations |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Private branch-scoped S3 credentials |
-| `AWS_ENDPOINT_URL_S3`, `AWS_REGION` | Neon object-storage endpoint and region |
+| `NEON_STORAGE_ACCESS_KEY_ID`, `NEON_STORAGE_SECRET_ACCESS_KEY` | Private Neon bucket credentials |
+| `NEON_STORAGE_ENDPOINT`, `NEON_STORAGE_REGION` | Neon object-storage endpoint and region |
 | `STORAGE_BACKEND=neon`, `STORAGE_BUCKET=assets` | Store new evidence in the private Neon bucket |
 | `SECRET_KEY`, `MFA_ENCRYPTION_KEY` | Backend identity protection; never frontend variables |
 | `RATE_LIMIT_STORAGE_URI` | `memory://` for one local process; shared `rediss://…`/`redis://…` for production |
@@ -67,9 +73,11 @@ Finish browser OAuth when prompted. `neon deploy` provisions the private bucket 
 
 ## Migrate and run
 
+Run these commands from `backend` after the local setup above:
+
 ```powershell
-.venv/Scripts/python.exe backend/migrate.py
-npm start
+.venv/Scripts/python.exe migrate.py
+.venv/Scripts/python.exe serve.py
 ```
 
 Open `http://127.0.0.1:5000/api/health` to check the database connection. A pooled URL serves normal requests; migrations use the direct URL. Existing local evidence retains its recorded local backend while new Neon evidence stores object keys and metadata in Postgres.
@@ -77,18 +85,18 @@ Open `http://127.0.0.1:5000/api/health` to check the database connection. A pool
 For an **empty synthetic demonstration environment only**:
 
 ```powershell
-.venv/Scripts/python.exe -m flask --app backend.app seed-demo
+.venv/Scripts/python.exe -m flask --app app seed-demo
 ```
 
 Do not seed known demo passwords into a real-data deployment. Provision approved users with the interactive `create-user` command instead. Privileged production users must complete MFA enrollment before production sign-in will be allowed. Enrollment/recovery need to be completed through the approved operating process; do not disable the production check to bypass setup.
 
 ## Deploy to Render
 
-1. Connect the GitHub repository to a Render Python web service, or import the supplied `render.yaml` blueprint.
-2. Use repository root as Root Directory.
-3. Build command: `pip install -r backend/requirements.txt`.
-4. Pre-deploy command: `python backend/migrate.py`.
-5. Start command: `python backend/serve.py`.
+1. Connect the GitHub repository to a Render Python web service. For Blueprint setup, set the Blueprint file path to `backend/render.yaml` (it declares `rootDir: backend`). If deploying this folder as its own repository, change that field to `.`.
+2. Set **Root Directory to `backend`**. Deployment needs no frontend or repository-root files.
+3. Build command: `pip install -r requirements.txt`.
+4. Pre-deploy command: `python migrate.py`. If your Render plan has no pre-deploy hook, apply migrations manually before starting the new release.
+5. Start command: `python serve.py`.
 6. Health path: `/api/health`.
 7. Copy the Neon-managed values from private `.env.local` into Render's environment dashboard yourself.
 8. Add the application secrets and set `APP_ENV=production`, `COOKIE_SECURE=true`, `API_HOST=0.0.0.0`, `STORAGE_BACKEND=neon`, `STORAGE_BUCKET=assets`.
@@ -102,9 +110,9 @@ Do not copy `API_PORT=5000` over Render's assigned `PORT`; the server reads `POR
 Use a separate Render background worker or another approved worker host:
 
 ```powershell
-.venv/Scripts/python.exe -m pip install -r backend/requirements-models.txt
-.venv/Scripts/python.exe backend/download_models.py
-npm run worker
+.venv/Scripts/python.exe -m pip install -r requirements-models.txt
+.venv/Scripts/python.exe download_models.py
+.venv/Scripts/python.exe worker.py
 ```
 
 The worker needs the same Neon/database/storage and model-path configuration as the API. Persist and protect the downloaded model bundle; a web-instance filesystem is not durable model storage. Models load locally with pinned revisions and remote model code disabled.
@@ -113,10 +121,12 @@ The worker processes matching, deadline scans, and quarantined uploads. Configur
 
 ## Checks and live service proof
 
+From `backend` (browser journeys additionally require the frontend checkout):
+
 ```powershell
-.venv/Scripts/python.exe -m pip install -r backend/requirements-test.txt
-.venv/Scripts/python.exe -m pytest backend/tests -q
-.venv/Scripts/python.exe backend/tests/live_neon_services.py --env-file .runtime/neon-validation.env --migrate --seed-demo
+.venv/Scripts/python.exe -m pip install -r requirements-test.txt
+.venv/Scripts/python.exe -m pytest tests -q
+.venv/Scripts/python.exe tests/live_neon_services.py --env-file /PRIVATE/PATH/validation.env --migrate --seed-demo
 ```
 
 The live command is opt-in and should run on an isolated Neon branch, not against real complaints. It checks actual Postgres authentication/persistence, actual private S3 round trips/checksums, API evidence metadata, quarantine denial, and cross-bureau denial. It never prints credential values. The validation branch used during setup expires automatically.

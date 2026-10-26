@@ -18,12 +18,16 @@ def sqlite_foreign_keys(connection, record):
 
 def create_app(config=None):
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env.local")
-    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     load_dotenv(Path(__file__).resolve().parents[1] / ".env.local")
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    # Optional workspace CLI files; a backend-only deployment needs neither.
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env.local")
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     root = Path(__file__).resolve().parents[2]
-    runtime = root / ".runtime"
+    runtime = Path(__file__).resolve().parents[1] / ".runtime"
+    # Preserve existing local workspace data; deployed services use their own folder.
+    if os.getenv("APP_ENV", "development") != "production" and (root / ".runtime").exists():
+        runtime = root / ".runtime"
     runtime.mkdir(exist_ok=True)
     app = Flask(__name__, static_folder=None)
     database_url = os.getenv("DATABASE_URL", "sqlite:///" + (runtime / "onecase.db").as_posix())
@@ -36,7 +40,7 @@ def create_app(config=None):
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         STORAGE_PATH=os.getenv("STORAGE_PATH", str(runtime / "documents")),
         COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
-        MODEL_PATH=os.getenv("MODEL_PATH", str(root / ".runtime" / "models")),
+        MODEL_PATH=os.getenv("MODEL_PATH", str(runtime / "models")),
         FRONTEND_PATH=str(root / "frontend" / "dist"),
         SECRET_KEY=os.getenv("SECRET_KEY"),
         APP_ENV=os.getenv("APP_ENV", "development"),
@@ -49,12 +53,13 @@ def create_app(config=None):
         MAX_UPLOAD_BYTES=int(os.getenv("MAX_UPLOAD_BYTES", str(3 * 1024 * 1024))),
         JOB_LIMIT_PER_HOUR=int(os.getenv("JOB_LIMIT_PER_HOUR", "30")),
         SECURITY_CONTACT=os.getenv("SECURITY_CONTACT", "Local demonstration administrator"),
-        STORAGE_BACKEND=os.getenv("STORAGE_BACKEND", "neon" if os.getenv("AWS_ENDPOINT_URL_S3") else "local"),
+        STORAGE_BACKEND=os.getenv("STORAGE_BACKEND", "neon" if os.getenv("NEON_STORAGE_ENDPOINT") or os.getenv("AWS_ENDPOINT_URL_S3") else "local"),
         STORAGE_BUCKET=os.getenv("STORAGE_BUCKET", "assets"),
-        AWS_ENDPOINT_URL_S3=os.getenv("AWS_ENDPOINT_URL_S3", ""),
-        AWS_REGION=os.getenv("AWS_REGION", ""),
-        AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID", ""),
-        AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+        # Legacy names are emitted by the Neon CLI, not a separate AWS service.
+        AWS_ENDPOINT_URL_S3=os.getenv("NEON_STORAGE_ENDPOINT", os.getenv("AWS_ENDPOINT_URL_S3", "")),
+        AWS_REGION=os.getenv("NEON_STORAGE_REGION", os.getenv("AWS_REGION", "")),
+        AWS_ACCESS_KEY_ID=os.getenv("NEON_STORAGE_ACCESS_KEY_ID", os.getenv("AWS_ACCESS_KEY_ID", "")),
+        AWS_SECRET_ACCESS_KEY=os.getenv("NEON_STORAGE_SECRET_ACCESS_KEY", os.getenv("AWS_SECRET_ACCESS_KEY", "")),
         FRONTEND_PROXY_SECRET=os.getenv("FRONTEND_PROXY_SECRET", ""),
     )
     app.config.update(config or {})
