@@ -1,4 +1,12 @@
 {
+  "name": "onecase-workspace",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "start": "python backend/serve.py",
+    "test:services": ".venv/Scripts/python.exe backend/tests/live_neon_services.py"
+  },
   "dependencies": {
     "@neon/config": "^1.9.4",
     "@neon/env": "^1.6.5"

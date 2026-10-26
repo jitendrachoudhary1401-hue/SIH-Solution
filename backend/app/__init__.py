@@ -18,14 +18,20 @@ def sqlite_foreign_keys(connection, record):
 
 def create_app(config=None):
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env.local")
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env.local")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     root = Path(__file__).resolve().parents[2]
     runtime = root / ".runtime"
     runtime.mkdir(exist_ok=True)
     app = Flask(__name__, static_folder=None)
+    database_url = os.getenv("DATABASE_URL", "sqlite:///" + (runtime / "onecase.db").as_posix())
+    if database_url.startswith(("postgres://", "postgresql://")):
+        database_url = "postgresql+psycopg://" + database_url.split("://", 1)[1]
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", "sqlite:///" + (runtime / "onecase.db").as_posix()),
+        SQLALCHEMY_DATABASE_URI=database_url,
+        DATABASE_URL_UNPOOLED=os.getenv("DATABASE_URL_UNPOOLED", ""),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
         STORAGE_PATH=os.getenv("STORAGE_PATH", str(runtime / "documents")),
@@ -42,8 +48,16 @@ def create_app(config=None):
         DOCUMENT_LIMIT_PER_CASE=int(os.getenv("DOCUMENT_LIMIT_PER_CASE", "30")),
         JOB_LIMIT_PER_HOUR=int(os.getenv("JOB_LIMIT_PER_HOUR", "30")),
         SECURITY_CONTACT=os.getenv("SECURITY_CONTACT", "Local demonstration administrator"),
+        STORAGE_BACKEND=os.getenv("STORAGE_BACKEND", "neon" if os.getenv("AWS_ENDPOINT_URL_S3") else "local"),
+        STORAGE_BUCKET=os.getenv("STORAGE_BUCKET", "assets"),
+        AWS_ENDPOINT_URL_S3=os.getenv("AWS_ENDPOINT_URL_S3", ""),
+        AWS_REGION=os.getenv("AWS_REGION", ""),
+        AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID", ""),
+        AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
     )
     app.config.update(config or {})
+    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_size": 3, "max_overflow": 2, "pool_timeout": 5, "pool_recycle": 300}
     if app.config["APP_ENV"] == "production" and (not app.config["COOKIE_SECURE"] or not app.config["SECRET_KEY"] or not app.config["MFA_ENCRYPTION_KEY"]):
         raise RuntimeError("Production requires secure HTTPS cookies, SECRET_KEY and MFA_ENCRYPTION_KEY.")
     Path(app.config["STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)
@@ -131,6 +145,8 @@ def create_app(config=None):
             return {"message": "Run the frontend dev server or build frontend/dist."}, 404
         return send_from_directory(dist, "index.html")
 
+    from .rate_limits import configure
+    configure(app)
     return app
 
 

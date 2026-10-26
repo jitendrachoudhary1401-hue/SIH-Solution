@@ -159,6 +159,8 @@ class Attachment(db.Model):
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
     filename = db.Column(db.String(200), nullable=False)
     key = db.Column(db.String(80), nullable=False, unique=True)
+    storage_backend = db.Column(db.String(20), nullable=False, default="local", server_default="local")
+    storage_bucket = db.Column(db.String(100))
     media_type = db.Column(db.String(80), nullable=False)
     size = db.Column(db.Integer, nullable=False)
     checksum = db.Column(db.String(64), nullable=False)

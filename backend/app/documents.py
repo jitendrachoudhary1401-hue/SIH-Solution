@@ -5,6 +5,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from flask import current_app
 from sqlalchemy import select
@@ -43,10 +44,13 @@ def scan_pending(limit=10):
     from .api import event
     attachments = db.session.scalars(select(Attachment).where(Attachment.scan_state == "pending").order_by(Attachment.id).limit(limit)).all()
     for item in attachments:
-        path = Path(current_app.config["STORAGE_PATH"]) / item.key
         try:
-            validate_file(path, item.media_type)
-            state, detail = scan_file(path)
+            from .storage import read
+            with tempfile.TemporaryDirectory(prefix="onecase-quarantine-") as temp:
+                path = Path(temp) / item.key
+                path.write_bytes(read(item))
+                validate_file(path, item.media_type)
+                state, detail = scan_file(path)
         except ValueError:
             state, detail = "rejected", "Document validation failed. Original evidence is quarantined."
         except (OSError, subprocess.TimeoutExpired):

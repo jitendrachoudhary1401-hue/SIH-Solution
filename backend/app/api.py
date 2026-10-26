@@ -624,18 +624,18 @@ def upload(case_id):
     if not media or ext not in {"application/pdf": [".pdf"], "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"]}[media]:
         abort(422, description="File signature and extension must match PDF, PNG or JPEG.")
     key = uuid4().hex
-    path = Path(current_app.config["STORAGE_PATH"]) / key
-    path.write_bytes(content)
+    from . import storage
+    storage_backend, storage_bucket = storage.put(key, content, media)
     try:
         sensitivity = request.form.get("sensitivity", "standard")
         if sensitivity not in ("standard", "restricted"):
             abort(422, description="Invalid evidence sensitivity.")
-        db.session.add(Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity))
+        db.session.add(Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity, storage_backend=storage_backend, storage_bucket=storage_bucket))
         event(case, "evidence_added", f"Evidence added: {name}")
         case.version += 1
         db.session.commit()
     except Exception:
-        path.unlink(missing_ok=True)
+        storage.remove(key, storage_backend, storage_bucket)
         raise
     return {"ok": True}, 201
 
@@ -651,12 +651,14 @@ def download(attachment_id):
         abort(404, description="Document unavailable in your field scope.")
     if attachment.scan_state != "clean":
         abort(423, description="Evidence is quarantined pending validation and malware checks.")
-    path = Path(current_app.config["STORAGE_PATH"]) / attachment.key
-    if not path.is_file():
+    from .storage import read
+    try:
+        content = read(attachment)
+    except FileNotFoundError:
         abort(404, description="Evidence file unavailable.")
     event(case, "evidence_downloaded", "Authorized evidence download", changes={"attachment_id": attachment.id})
     db.session.commit()
-    return send_file(path, as_attachment=True, download_name=attachment.filename, mimetype=attachment.media_type)
+    return send_file(io.BytesIO(content), as_attachment=True, download_name=attachment.filename, mimetype=attachment.media_type)
 
 
 def authorized_pairs():

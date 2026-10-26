@@ -441,8 +441,8 @@ def download_packet(packet_id):
             evidence = evidence_or_422(case, entry["id"], item)
             if evidence.checksum != entry["sha256"]:
                 abort(409, description="Packet evidence changed. Prepare a new reviewed packet.")
-            path = Path(current_app.config["STORAGE_PATH"]) / evidence.key
-            archive.write(path, f"{evidence.id}-{evidence.filename}")
+            from .storage import read
+            archive.writestr(f"{evidence.id}-{evidence.filename}", read(evidence))
     event(case, "packet_downloaded", "Authorized case packet downloaded", changes={"packet_id": packet.id})
     db.session.commit()
     output.seek(0)

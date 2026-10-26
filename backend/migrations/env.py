@@ -16,6 +16,13 @@ logger = logging.getLogger('alembic.env')
 
 
 def get_engine():
+    direct_url = current_app.config.get('DATABASE_URL_UNPOOLED')
+    if direct_url:
+        from sqlalchemy import create_engine
+        if direct_url.startswith(('postgres://', 'postgresql://')):
+            direct_url = 'postgresql+psycopg://' + direct_url.split('://', 1)[1]
+        # Migrations use a direct Neon connection, never transaction-mode pooling.
+        return create_engine(direct_url, pool_pre_ping=True)
     try:
         # this works with Flask-SQLAlchemy<3 and Alchemical
         return current_app.extensions['migrate'].db.get_engine()
