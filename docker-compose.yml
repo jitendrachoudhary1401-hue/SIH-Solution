@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-onecase}
+      POSTGRES_USER: ${POSTGRES_USER:-onecase}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onecase_secure_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onecase} -d ${POSTGRES_DB:-onecase}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-onecase}:${POSTGRES_PASSWORD:-onecase_secure_pass}@db:5432/${POSTGRES_DB:-onecase}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-OneCaseDemo!2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_runtime:/app/.runtime
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "worker.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-onecase}:${POSTGRES_PASSWORD:-onecase_secure_pass}@db:5432/${POSTGRES_DB:-onecase}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    volumes:
+      - app_runtime:/app/.runtime
+
+volumes:
+  postgres_data:
+  app_runtime:
