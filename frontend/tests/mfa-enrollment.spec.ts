@@ -10,7 +10,8 @@ test('first privileged sign-in completes MFA and saves recovery codes before ope
     const path = new URL(route.request().url()).pathname;
     calls.push(path);
     let body: unknown;
-    if (path === '/api/auth/me') body = { user: { ...user, mfa_enrollment_required: !enabled }, csrf: 'synthetic-test-csrf' };
+    if (path === '/api/wake') body = { status: 'awake', service: 'onecase' };
+    else if (path === '/api/auth/me') body = { user: { ...user, mfa_enrollment_required: !enabled }, csrf: 'synthetic-test-csrf' };
     else if (path === '/api/auth/mfa/setup') body = { secret: 'SYNTHETIC-TEST-KEY', uri: '' };
     else if (path === '/api/auth/mfa/confirm') { enabled = true; body = { csrf: 'synthetic-rotated-csrf', recovery_codes: ['audit-code-01', 'audit-code-02'] }; }
     else if (path === '/api/admin/workspace') body = { users: [], roles: [], operations: [], permissions: [], appointments: [], role_assignments: [], security_events: [] };

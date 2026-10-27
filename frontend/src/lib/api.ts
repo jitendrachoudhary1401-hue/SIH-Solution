@@ -56,10 +56,47 @@ export function logoutSession() {
   localStorage.setItem(pendingLogoutKey, '1');
   return finishPendingLogout();
 }
+
+export async function wakeBackend(signal?: AbortSignal): Promise<void> {
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    signal?.throwIfAborted();
+    if (!navigator.onLine) throw new ApiError('No internet connection.', 0);
+    try {
+      const timeout = AbortSignal.timeout(Math.max(1, Math.min(20000, deadline - Date.now())));
+      const response = await fetch(apiBase + '/wake', {
+        method: 'GET', credentials: 'omit', cache: 'no-store',
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.service === 'onecase' && data.status === 'awake') return;
+      // Configuration/authentication errors are not cold starts.
+      if ((response.status >= 400 && response.status < 500) ||
+          (response.status === 503 && /configur/i.test(data?.error?.message || ''))) {
+        throw new ApiError(data?.error?.message || 'The service connection needs attention.', response.status);
+      }
+    } catch (error) {
+      if (signal?.aborted || error instanceof ApiError) throw error;
+      // A sleeping host may time out or return a temporary HTML loading page.
+    }
+    const delay = Math.min(5000, deadline - Date.now());
+    if (delay > 0) await new Promise<void>((resolve, reject) => {
+      const abort = () => { window.clearTimeout(timer); reject(signal?.reason); };
+      const timer = window.setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, delay);
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+    });
+  }
+  throw new ApiError('The service has not finished starting. Please try again.', 503);
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const form = options.body instanceof FormData;
   let response: Response;
   try {
+    // Wait before the initial identity read; never retry a mutation or resume a
+    // session that the outage flow already marked for revocation.
+    if (path === '/auth/me' && !csrf && !hasPendingLogout()) await wakeBackend(options.signal || undefined);
     response = await fetch(apiBase + path, { ...options, signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000), credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
   } catch (error) {
     // Navigation cancels outstanding fetches; it is not a service outage.

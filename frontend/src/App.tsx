@@ -14,6 +14,7 @@ import AccountHome from './features/AccountHome';
 import ComplaintRecord, { ClosureReports, ComplaintTimeline } from './features/ComplaintRecord';
 import DemoAccounts from './features/DemoAccounts';
 import BackendUnavailable from './features/BackendUnavailable';
+import BackendStarting from './features/BackendStarting';
 import { connectionLost, finishPendingLogout, hasPendingLogout, logoutSession } from './lib/api';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Bell, Building2, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, FileCheck2, FileText, FolderOpen, LayoutDashboard, Link2, LogOut, Menu, Plus, Search, ShieldCheck, Upload, X, Eye, EyeOff, AlertCircle, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -37,6 +38,7 @@ export default function App() {
     if (recoveryInProgress.current || !navigator.onLine) return;
     recoveryInProgress.current = true; setCheckingConnection(true);
     try {
+      await api('/wake');
       if (hasPendingLogout()) await finishPendingLogout();
       else await api('/health');
       setConnectionFailure(false);
@@ -44,7 +46,7 @@ export default function App() {
     finally { recoveryInProgress.current = false; setCheckingConnection(false); }
   }, []);
   const [expired, setExpired] = useState(false);
-  const identity = useQuery({ queryKey: ['identity'], queryFn: () => api<{ user: User; csrf: string }>('/auth/me'), enabled: !signedOut && !['/forgot-password', '/reset-password'].includes(location.pathname), retry: false, staleTime: 5 * 60000 });
+  const identity = useQuery({ queryKey: ['identity'], queryFn: ({signal}) => api<{ user: User; csrf: string }>('/auth/me', {signal}), enabled: !signedOut && !['/forgot-password', '/reset-password'].includes(location.pathname), retry: false, staleTime: 5 * 60000 });
   useEffect(() => { if (identity.data) setCsrf(identity.data.csrf); }, [identity.data]);
   useEffect(() => {
     const disconnect = (connection: boolean) => {
@@ -76,7 +78,7 @@ export default function App() {
   const logout = async () => { const pending = logoutSession(); setSignedOut(true); setConnectionFailure(false); setExpired(false); setCsrf(''); setMessage(''); await client.cancelQueries(); client.clear(); navigate('/officer/login', {replace: true}); await pending.catch(() => {}); };
   if (connectionFailure) return <BackendUnavailable checking={checkingConnection} onRetry={() => void checkConnection()} />;
   if (['/forgot-password', '/reset-password'].includes(location.pathname)) return <PasswordRecovery key={location.pathname} />;
-  if (!signedOut && identity.isPending) return <Loading />;
+  if (!signedOut && identity.isPending) return <BackendStarting />;
   if (!signedOut && identity.data?.user.mfa_enrollment_required) return <MfaEnrollment onComplete={() => { void client.invalidateQueries({ queryKey: ['identity'] }); }} onLogout={() => { void logout(); }} />;
   if (signedOut || !identity.data) {
     if (location.pathname === '/register') return <Navigate to="/register/student-parent" replace />;

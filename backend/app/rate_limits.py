@@ -21,10 +21,10 @@ def configure(app):
                       headers_enabled=True, storage_uri=app.config["RATELIMIT_STORAGE_URI"],
                       swallow_errors=False, in_memory_fallback_enabled=False)
     limiter.init_app(app)
-    limiter.request_filter(lambda: not request.path.startswith("/api/") or request.path == "/api/health")
+    limiter.request_filter(lambda: not request.path.startswith("/api/") or request.path in {"/api/health", "/api/wake"})
     writes = limiter.shared_limit(os.getenv("RATE_LIMIT_WRITES", "30 per minute"), scope="all-database-writes", methods=["POST", "PATCH", "PUT", "DELETE"])
     for endpoint, view in list(app.view_functions.items()):
-        if endpoint in {"frontend", "health"}:
+        if endpoint in {"frontend", "health", "wake"}:
             continue
         wrapped = writes(view)
         if endpoint in {"api.login", "api.signup", "demo.demo_login"}:

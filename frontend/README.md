@@ -49,6 +49,13 @@ See [GitHub deployment instructions](../.github/README.md) for CI behavior.
 
 The proxy validates write origins before forwarding them. API responses use `no-store`. Original evidence is downloaded through authorized Flask endpoints rather than public S3 links.
 
+On initial load, the app first calls `/api/wake` and waits up to 90 seconds for
+temporary cold-start failures to recover, showing “Waking up OneCase”. It does
+not attach session credentials to this liveness request. Invalid proxy
+configuration fails immediately instead of pretending the server is asleep.
+Protected data, logout revocation and writes still use the normal API checks.
+This wake flow runs when a user visits; it does not schedule background pings.
+
 Keep individual uploads within the backend's deployed limit (default 3 MiB) and Vercel's function payload limits. Large document archives require a separate approved delivery design; do not make sensitive buckets public as a workaround.
 
 ## Install as an app

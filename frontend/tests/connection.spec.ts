@@ -1,8 +1,11 @@
 import {test, expect, type Page} from '@playwright/test';
 
 test('backend unavailable on initial load shows the custom outage screen', async ({page}) => {
+  await page.clock.install();
   await page.route('**/api/**', route => route.fulfill({status: 503, contentType: 'application/json', body: '{}'}));
   await page.goto('/officer/login');
+  await expect(page.getByRole('heading', {name: 'Waking up OneCase'})).toBeVisible();
+  await page.clock.fastForward(91000);
   await expect(page.getByRole('heading', {name: 'Backend is down. Try again later.'})).toBeVisible();
   await expect(page.getByLabel('Password', {exact: true})).toHaveCount(0);
   await page.getByRole('button', {name: 'Try again', exact: true}).click();
@@ -10,6 +13,40 @@ test('backend unavailable on initial load shows the custom outage screen', async
   await page.unroute('**/api/**');
   await page.getByRole('button', {name: 'Try again', exact: true}).click();
   await expect(page.getByRole('heading', {name: 'Sign in to OneCase'})).toBeVisible();
+});
+
+test('cold start retries liveness before reading a session and opens sign-in automatically', async ({page}) => {
+  await page.clock.install();
+  let wakes = 0;
+  let identityReads = 0;
+  let ready = false;
+  await page.route('**/api/wake', route => {
+    wakes++;
+    return route.fulfill(!ready
+      ? {status: 200, contentType: 'text/html', body: '<html>Starting service</html>'}
+      : {status: 200, contentType: 'application/json', body: '{"status":"awake","service":"onecase"}'});
+  });
+  await page.route('**/api/auth/me', route => {
+    identityReads++;
+    return route.fulfill({status: 401, contentType: 'application/json', body: '{"error":{"message":"Sign in"}}'});
+  });
+  await page.goto('/officer/login');
+  await expect(page.getByRole('heading', {name: 'Waking up OneCase'})).toBeVisible();
+  await expect.poll(() => wakes).toBeGreaterThanOrEqual(1);
+  expect(identityReads).toBe(0);
+  expect(await page.evaluate(() => localStorage.getItem('onecase.logout-pending'))).toBeNull();
+  ready = true;
+  await page.clock.fastForward(6000);
+  await expect(page.getByRole('heading', {name: 'Sign in to OneCase'})).toBeVisible();
+  expect(wakes).toBeGreaterThanOrEqual(2);
+  expect(identityReads).toBe(1);
+});
+
+test('a proxy configuration error does not masquerade as a sleeping backend', async ({page}) => {
+  await page.route('**/api/**', route => route.fulfill({status: 503, contentType: 'application/json',
+    body: '{"error":{"message":"The application proxy is not configured securely."}}'}));
+  await page.goto('/officer/login');
+  await expect(page.getByRole('heading', {name: 'Backend is down. Try again later.'})).toBeVisible();
 });
 
 async function login(page: Page) {

@@ -231,6 +231,22 @@ Do not copy `API_PORT=5000` over Render's assigned `PORT`; the server reads `POR
 
 ## Worker, evidence scanning and models
 
+### Free-tier wake endpoint
+
+`GET /api/wake` (also `HEAD`) is a public, uncached liveness endpoint returning
+`{"status":"awake","service":"onecase"}`. It performs no database, Redis,
+storage, authentication or model work, and exposes no private records. Use the
+Render web-service URL plus `/api/wake` for a wake request. The Vercel equivalent
+is `https://sih-solution-kappa.vercel.app/api/wake` after deploying both sides and
+configuring the existing shared proxy secret. No additional environment key is
+required. `/api/health` still checks database readiness.
+
+The frontend sends a wake request before its initial identity lookup and retries
+temporary cold-start failures for up to 90 seconds. During that time it displays
+“Waking up OneCase”. This is an on-visit wake flow, not a scheduled keep-alive;
+Render Free can still spin down while idle. Existing outage/session revocation
+remains enforced, and writes are never replayed automatically.
+
 Use a separate Render background worker or another approved worker host:
 
 ```powershell

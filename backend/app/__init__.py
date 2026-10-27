@@ -124,7 +124,7 @@ def create_app(config=None):
         proxy_secret = app.config["FRONTEND_PROXY_SECRET"]
         import hmac
         trusted_proxy = bool(proxy_secret and hmac.compare_digest(proxy_secret, request.headers.get("X-OneCase-Proxy-Key", "")))
-        if proxy_secret and app.config["APP_ENV"] == "production" and request.path.startswith("/api/") and request.path != "/api/health":
+        if proxy_secret and app.config["APP_ENV"] == "production" and request.path.startswith("/api/") and request.path not in {"/api/health", "/api/wake"}:
             if not trusted_proxy:
                 abort(403, description="Use the configured application origin to access this service.")
         if request.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -188,6 +188,11 @@ def create_app(config=None):
         from sqlalchemy import text
         db.session.execute(text("SELECT 1"))
         return {"status": "ok", "service": "onecase"}
+
+    @app.get("/api/wake")
+    def wake():
+        # Public liveness only: no authentication, database, storage or model work.
+        return {"status": "awake", "service": "onecase"}
 
     @app.get("/")
     def api_info():
