@@ -1,0 +1,60 @@
+import { test, expect } from '@playwright/test';
+
+test('email link resets a password, revokes sessions and preserves an empty workspace', async ({ page }) => {
+  const email = 'browser-password-reset@example.com';
+  const original = 'OriginalPassphrase!2026';
+  const replacement = 'ReplacementPassphrase!2026';
+  expect((await page.request.post('/api/auth/register', {data: {name: 'Password Recovery User', email, account_type: 'student', password: original, confirm_password: original}})).status()).toBe(201);
+  expect((await page.request.post('/api/auth/login', {data: {email, password: original}})).status()).toBe(200);
+  const oldSession = (await page.context().cookies()).find(cookie => cookie.name === 'onecase_session')!.value;
+  await page.context().clearCookies();
+  await page.goto('/officer/login');
+  await page.getByRole('link', {name: 'Forgot password?', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'Forgot your password?'})).toBeVisible();
+  await page.getByLabel('Email address').fill(email);
+  await page.getByRole('button', {name: 'Send reset link'}).click();
+  await expect(page.getByRole('heading', {name: 'Check your email'})).toBeVisible();
+  let messages: {content: {value: string}[]}[] = [];
+  await expect.poll(async () => {
+    messages = (await (await page.request.get('/api/test-only/mailbox?email=' + encodeURIComponent(email))).json()).items;
+    return messages.length;
+  }).toBe(1);
+  const link = messages[0].content[0].value.split('\n').find(line => line.startsWith('http'))!;
+  await page.goto(link);
+  await expect(page.getByRole('heading', {name: 'Set a new password'})).toBeVisible();
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await page.getByLabel('New password', {exact: true}).fill(replacement);
+  await page.getByLabel('Confirm new password').fill('DifferentPassphrase!2026');
+  await page.getByRole('button', {name: 'Update password'}).click();
+  await expect(page.getByRole('alert')).toHaveText('Passwords do not match.');
+  await page.getByLabel('Confirm new password').fill(replacement);
+  await page.getByRole('button', {name: 'Update password'}).click();
+  await expect(page.getByRole('heading', {name: 'Password updated'})).toBeVisible();
+  expect((await page.request.get('/api/auth/me', {headers: {cookie: `onecase_session=${oldSession}`}})).status()).toBe(401);
+  expect((await page.request.post('/api/auth/login', {data: {email, password: original}})).status()).toBe(401);
+  await page.getByRole('link', {name: 'Back to sign in'}).first().click();
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password', {exact: true}).fill(replacement);
+  await page.getByRole('button', {name: 'Sign in to workspace'}).click();
+  await expect(page.getByRole('heading', {name: 'Welcome, Password Recovery User'})).toBeVisible();
+  await expect(page.locator('.stat-card>strong')).toHaveText(['0', '0', '0', '0']);
+  await page.goto(link);
+  await page.getByLabel('New password', {exact: true}).fill(replacement);
+  await page.getByLabel('Confirm new password').fill(replacement);
+  await page.getByRole('button', {name: 'Update password'}).click();
+  await expect(page.getByRole('alert')).toContainText('invalid or expired');
+});
+
+test('missing token and unavailable email setup show actionable recovery messages', async ({ page }) => {
+  await page.goto('/reset-password');
+  await expect(page.getByText('Open the complete reset link from your email.', {exact: false})).toBeVisible();
+  await page.getByRole('link', {name: 'Request a reset link'}).click();
+  await page.route('**/api/auth/forgot-password', route => route.fulfill({status: 503, contentType: 'application/json', body: JSON.stringify({error: {message: 'Password reset emails are not configured yet.'}})}));
+  await page.getByLabel('Email address').fill('someone@example.com');
+  await page.getByRole('button', {name: 'Send reset link'}).click();
+  await expect(page.getByRole('alert')).toContainText('not configured yet');
+  await expect(page.getByRole('heading', {name: 'Forgot your password?'})).toBeVisible();
+  await page.setViewportSize({width: 390, height: 844});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  await page.screenshot({path: 'test-results/password-recovery-mobile.png', fullPage: true});
+});

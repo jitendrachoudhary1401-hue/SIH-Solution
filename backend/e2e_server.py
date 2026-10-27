@@ -1,6 +1,7 @@
 """Disposable synthetic database for browser tests; never touches the user's demo DB."""
 import tempfile
 import os
+import json
 from pathlib import Path
 from waitress import serve
 from app import create_app
@@ -11,6 +12,27 @@ from app.jobs import monitor
 with tempfile.TemporaryDirectory(prefix="onecase-e2e-") as directory:
     root = Path(directory)
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (root / "test.db").as_posix(), "STORAGE_PATH": str(root / "documents"), "STORAGE_BACKEND": "local", "RATELIMIT_ENABLED": False})
+    # Capture provider requests only in this disposable test host. Runtime
+    # main.py/serve.py never import this fixture or expose a mailbox endpoint.
+    from app import mail
+    app.config.update(SENDGRID_API_KEY="isolated-browser-test-key", SENDGRID_FROM_EMAIL="test@example.test",
+                      SENDGRID_FROM_NAME="OneCase", PUBLIC_APP_URL="http://127.0.0.1:5174")
+    outbox = []
+    class AcceptedEmail:
+        status = 202
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+    class CaptureSendGrid:
+        def open(self, request, **kwargs):
+            assert request.full_url == "https://api.sendgrid.com/v3/mail/send"
+            outbox.append(json.loads(request.data))
+            return AcceptedEmail()
+    mail.build_opener = lambda *args: CaptureSendGrid()
+    @app.get("/api/test-only/mailbox")
+    def test_mailbox():
+        from flask import request
+        email = request.args.get("email", "")
+        return {"items": [item for item in outbox if item["personalizations"][0]["to"][0]["email"] == email]}
     # This disposable test host validates actual file structure and injects a
     # scanner double. Production never installs this synthetic scanner.
     from app import documents

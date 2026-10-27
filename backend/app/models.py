@@ -53,6 +53,14 @@ class Session(db.Model):
     user = db.relationship(User)
 
 
+class PasswordReset(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    used_at = db.Column(db.DateTime(timezone=True))
+
+
 class LoginAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(64), nullable=False, index=True)

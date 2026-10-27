@@ -10,7 +10,7 @@ from argon2.exceptions import VerificationError
 from cryptography.fernet import Fernet, InvalidToken
 from flask import Blueprint, abort, current_app, g
 from pydantic import Field
-from .models import db, now, User, Session
+from .models import db, now, User, Session, PasswordReset
 from .auth import authenticated, digest, roles
 from .api import Input, parse, hasher, event
 
@@ -149,6 +149,7 @@ def change_password():
     if compromised_password(data.new_password):
         abort(422, description="Choose a passphrase that is not on the approved compromised-password denylist.")
     g.user.password_hash = hasher.hash(data.new_password)
+    db.session.query(PasswordReset).filter(PasswordReset.user_id == g.user.id, PasswordReset.used_at.is_(None)).update({"used_at": now()})
     db.session.query(Session).filter(Session.user_id == g.user.id).delete()
     event(None, "password_changed", "Password changed and all sessions revoked")
     db.session.commit()

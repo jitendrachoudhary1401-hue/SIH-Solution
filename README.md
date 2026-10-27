@@ -36,7 +36,7 @@ npm run build
 npm start
 ```
 
-The local API/application opens at `http://127.0.0.1:5000` unless `API_PORT` is changed. For frontend development, run `npm run dev` in another terminal. Install the optional model dependencies/artifacts before starting `npm run worker`.
+The backend API runs at `http://127.0.0.1:5000`; its root returns JSON and `/api/health` checks connectivity. It does not serve frontend pages or assets. Run `npm run dev` in another terminal and open the frontend at `http://127.0.0.1:5173`. Vite proxies `/api` requests to port 5000. Install the optional model dependencies/artifacts before starting `npm run worker`.
 
 Preserve existing `backend/.env` and root `.env.local`; do not overwrite them with example files. Neon/database/storage credentials are backend-only. The frontend uses `/api` and the Vercel server-only proxy; no service secret belongs in a `VITE_*` variable.
 

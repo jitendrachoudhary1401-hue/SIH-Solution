@@ -46,6 +46,10 @@ def create_app(config=None):
         MFA_ENCRYPTION_KEY=os.getenv("MFA_ENCRYPTION_KEY", ""),
         SESSION_IDLE_MINUTES=int(os.getenv("SESSION_IDLE_MINUTES", "30")),
         STEP_UP_MINUTES=int(os.getenv("STEP_UP_MINUTES", "10")),
+        PUBLIC_APP_URL=os.getenv("PUBLIC_APP_URL", "http://127.0.0.1:5173"),
+        SENDGRID_API_KEY=os.getenv("SENDGRID_API_KEY", ""),
+        SENDGRID_FROM_EMAIL=os.getenv("SENDGRID_FROM_EMAIL", ""),
+        SENDGRID_FROM_NAME=os.getenv("SENDGRID_FROM_NAME", "OneCase"),
         CLAMAV_HOST=os.getenv("CLAMAV_HOST", ""),
         CLAMAV_PORT=int(os.getenv("CLAMAV_PORT", "3310")),
         DOCUMENT_LIMIT_PER_CASE=int(os.getenv("DOCUMENT_LIMIT_PER_CASE", "30")),
@@ -75,10 +79,12 @@ def create_app(config=None):
     from .workflow import workflow_api
     from .administration import administration_api
     from .security import security_api
+    from .password_reset import password_reset_api
     app.register_blueprint(api, url_prefix="/api")
     app.register_blueprint(workflow_api, url_prefix="/api")
     app.register_blueprint(administration_api, url_prefix="/api")
     app.register_blueprint(security_api, url_prefix="/api")
+    app.register_blueprint(password_reset_api, url_prefix="/api")
     register(app)
 
     @app.before_request

@@ -59,6 +59,13 @@ Browser tests require the full workspace checkout and a Python test environment 
 
 ## Troubleshooting
 
+**Forgot password?** on sign-in opens `/forgot-password`. Reset emails are sent
+by the backend through Twilio SendGrid after its private env fields are filled
+in. The email opens `/reset-password` with a one-time token in the URL fragment;
+the page removes that fragment from the address bar and requires a confirmed
+new password. Tokens expire after 20 minutes. Browser tests capture SendGrid
+requests only inside the disposable test host; they never send real emails.
+
 Unknown frontend URLs display a custom warm, light 404 page with a return link. Known protected routes still send signed-out visitors to sign-in.
 
 Network errors, request timeouts, browser offline events and API gateway failures (502/503/504) automatically clear the visible session and query cache. A persistent logout marker prevents a reload or another tab from restoring the previous session. When connectivity returns, the frontend revokes the old server session before allowing another sign-in. An unreachable backend cannot revoke its session immediately; the local workspace is hidden immediately and server revocation is retried on reconnect, every 15 seconds while signed out, and before sign-in. Normal authorization/validation errors and missing records do not trigger connection logout.

@@ -100,7 +100,34 @@ Port 5000 serves only the backend: `/` returns API information as JSON and
 on this port. Start the frontend separately with `npm run dev -- --port 5173
 --strictPort` from `frontend`, then open `http://127.0.0.1:5173`.
 
-### Account registration
+### Password recovery with Twilio SendGrid
+
+Sign-in includes **Forgot password?**, which opens `/forgot-password`. Fill in
+these private fields in `backend/.env.local` and restart the backend:
+
+```dotenv
+SENDGRID_API_KEY=
+SENDGRID_FROM_EMAIL=
+SENDGRID_FROM_NAME=OneCase
+PUBLIC_APP_URL=http://127.0.0.1:5173
+```
+
+Use a SendGrid API key with Mail Send permission and a sender address verified
+through SendGrid sender/domain authentication. Use the deployed HTTPS frontend
+address for `PUBLIC_APP_URL` in production. Delivery uses the SendGrid v3 Mail
+Send HTTPS API; no SMTP username or password is needed. Keep all SendGrid
+settings in the backend, never in `VITE_*` fields.
+
+Reset links expire after 20 minutes and work once. Only token hashes are stored.
+A successful reset revokes all sessions and outstanding reset links, preserves
+MFA, and sends a confirmation email. Missing credentials show an honest setup
+error; known and unknown emails otherwise receive the same request response.
+Email is delivered outside the HTTP request, and delivery failures are recorded
+in the backend log without credentials, reset links or message bodies. A failed
+delivery invalidates its token; request a new link after fixing the provider.
+Apply migration `d72fa0981c43` before using password recovery.
+
+### Registration pages
 
 The frontend provides `/register/student-parent` and `/register/other`, linked
 from sign-in. Both submit to `POST /api/auth/register` and persist accounts with

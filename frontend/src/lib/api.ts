@@ -66,7 +66,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     connectionLost();
     throw new ApiError('Connection lost. You have been signed out. Reconnect and sign in again.', 0);
   }
-  if ([502, 503, 504].includes(response.status)) {
+  if ([502, 503, 504].includes(response.status) && !(response.status === 503 && path === '/auth/forgot-password')) {
     connectionLost();
     throw new ApiError('The service is unavailable. You have been signed out. Try signing in again when it is available.', response.status);
   }

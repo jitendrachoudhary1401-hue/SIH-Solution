@@ -28,6 +28,15 @@ def configure(app):
         wrapped = writes(view)
         if endpoint in {"api.login", "api.signup"}:
             wrapped = limiter.limit(os.getenv("RATE_LIMIT_LOGIN", "5 per minute"), override_defaults=False)(wrapped)
+        elif endpoint == "password_reset.forgot_password":
+            def reset_account_key():
+                data = request.get_json(silent=True)
+                email = str(data.get("email", ""))[:180].strip().lower() if isinstance(data, dict) else ""
+                return hashlib.sha256(email.encode()).hexdigest()
+            wrapped = limiter.limit("3 per hour", key_func=reset_account_key, override_defaults=False)(wrapped)
+            wrapped = limiter.limit("5 per minute", override_defaults=False)(wrapped)
+        elif endpoint == "password_reset.reset_password":
+            wrapped = limiter.limit("10 per minute", override_defaults=False)(wrapped)
         elif endpoint == "api.upload":
             wrapped = limiter.limit("10 per hour", override_defaults=False)(wrapped)
         elif endpoint == "api.retry_matching":
