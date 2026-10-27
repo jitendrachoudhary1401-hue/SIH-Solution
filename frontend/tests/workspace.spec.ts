@@ -50,7 +50,7 @@ test('officer creates, acts on, disposes, reopens, and transfers a case', async 
   await expect(page).toHaveURL(/\/complaints$/);
   await expect(page.getByText(reference, { exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('heading', { name: 'Officer sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to OneCase' })).toBeVisible();
   await signIn(page, 'lead.pgrc@onecase.demo');
   await page.getByRole('link', { name: 'Complaints', exact: true }).click();
   await page.getByRole('link', { name: reference, exact: true }).click();

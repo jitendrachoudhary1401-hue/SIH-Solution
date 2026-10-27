@@ -25,6 +25,9 @@ let csrf = '';
 const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 export function setCsrf(value: string) { csrf = value; }
 const pendingLogoutKey = 'onecase.logout-pending';
+let leavingPage = false;
+window.addEventListener('pagehide', () => { leavingPage = true; });
+window.addEventListener('pageshow', () => { leavingPage = false; });
 export function hasPendingLogout() { return localStorage.getItem(pendingLogoutKey) === '1'; }
 export function connectionLost() {
   localStorage.setItem(pendingLogoutKey, '1');
@@ -58,7 +61,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   try {
     response = await fetch(apiBase + path, { ...options, signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000), credentials: 'same-origin', headers: { ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}), 'X-CSRF-Token': csrf, ...options.headers } });
   } catch (error) {
-    if (options.signal?.aborted) throw error;
+    // Navigation cancels outstanding fetches; it is not a service outage.
+    if (leavingPage || options.signal?.aborted) throw error;
     connectionLost();
     throw new ApiError('Connection lost. You have been signed out. Reconnect and sign in again.', 0);
   }
@@ -67,7 +71,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new ApiError('The service is unavailable. You have been signed out. Try signing in again when it is available.', response.status);
   }
   const data = await response.json().catch((error: unknown) => {
-    if (error instanceof TypeError || (error instanceof DOMException && error.name !== 'SyntaxError')) {
+    if (!leavingPage && (error instanceof TypeError || (error instanceof DOMException && error.name !== 'SyntaxError'))) {
       connectionLost();
       throw new ApiError('Connection lost while receiving the response. Sign in again after reconnecting.', 0);
     }

@@ -248,6 +248,8 @@ def signup():
     from .auth import PUBLIC_ROLES, ROLES
     from .security import compromised_password
     data = parse(SignupInput)
+    if data.account_type == "admin":
+        abort(422, description="System administrator registration is not available. Use the existing administrator sign-in.")
     email = data.email.lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         abort(422, description="Enter a valid email address.")

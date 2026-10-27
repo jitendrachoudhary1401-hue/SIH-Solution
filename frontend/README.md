@@ -12,7 +12,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Start the Flask backend in a second terminal using [the backend guide](../backend/README.md). The development frontend opens at `http://127.0.0.1:5173` and proxies `/api` to the backend.
+Start the Flask backend in a second terminal using [the backend guide](../backend/README.md). The development frontend opens at `http://127.0.0.1:5173` and proxies `/api` to the backend at `http://127.0.0.1:5000`. The backend port serves JSON API responses only. Vite fails if its configured port is occupied, so it does not silently move the frontend to another port.
 
 | Variable | Where it is used | Example |
 | --- | --- | --- |

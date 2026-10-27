@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify
 from flask_migrate import Migrate
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -41,7 +41,6 @@ def create_app(config=None):
         STORAGE_PATH=os.getenv("STORAGE_PATH", str(runtime / "documents")),
         COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true",
         MODEL_PATH=os.getenv("MODEL_PATH", str(runtime / "models")),
-        FRONTEND_PATH=str(root / "frontend" / "dist"),
         SECRET_KEY=os.getenv("SECRET_KEY"),
         APP_ENV=os.getenv("APP_ENV", "development"),
         MFA_ENCRYPTION_KEY=os.getenv("MFA_ENCRYPTION_KEY", ""),
@@ -145,18 +144,9 @@ def create_app(config=None):
         db.session.execute(text("SELECT 1"))
         return {"status": "ok", "service": "onecase"}
 
-    @app.get("/", defaults={"path": ""})
-    @app.get("/<path:path>")
-    def frontend(path):
-        from flask import abort
-        if path.startswith("api/"):
-            abort(404)
-        dist = Path(app.config["FRONTEND_PATH"])
-        if path and (dist / path).is_file():
-            return send_from_directory(dist, path)
-        if not (dist / "index.html").exists():
-            return {"message": "Run the frontend dev server or build frontend/dist."}, 404
-        return send_from_directory(dist, "index.html")
+    @app.get("/")
+    def api_info():
+        return {"service": "onecase", "message": "Backend API", "health": "/api/health"}
 
     from .rate_limits import configure
     configure(app)

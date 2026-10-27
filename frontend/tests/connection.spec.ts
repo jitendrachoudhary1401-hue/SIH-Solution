@@ -9,7 +9,7 @@ test('backend unavailable on initial load shows the custom outage screen', async
   await expect(page.getByRole('heading', {name: 'Backend is down. Try again later.'})).toBeVisible();
   await page.unroute('**/api/**');
   await page.getByRole('button', {name: 'Try again', exact: true}).click();
-  await expect(page.getByRole('heading', {name: 'Officer sign in'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Sign in to OneCase'})).toBeVisible();
 });
 
 async function login(page: Page) {
@@ -52,7 +52,7 @@ for (const failure of ['network', 'gateway'] as const) {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('onecase.logout-pending'))).toBeNull();
     const revoked = await page.request.get('/api/auth/me', {headers: {cookie: `onecase_session=${oldSession}`}});
     expect(revoked.status()).toBe(401);
-    await expect(page.getByRole('heading', {name: 'Officer sign in'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Sign in to OneCase'})).toBeVisible();
     await login(page);
   });
 }
@@ -65,5 +65,5 @@ test('offline event signs out and 404 API responses do not', async ({page, conte
   await expect(page.getByRole('heading', {name: 'Backend is down. Try again later.'})).toBeVisible();
   await context.setOffline(false);
   await expect.poll(() => page.evaluate(() => localStorage.getItem('onecase.logout-pending'))).toBeNull();
-  await expect(page.getByRole('heading', {name: 'Officer sign in'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Sign in to OneCase'})).toBeVisible();
 });

@@ -23,6 +23,9 @@ class Bureau(db.Model):
 
 
 class User(db.Model):
+    __table_args__ = (db.Index("uq_single_system_administrator", "role", unique=True,
+                              postgresql_where=db.text("role = 'admin'"),
+                              sqlite_where=db.text("role = 'admin'")),)
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(180), unique=True, nullable=False)

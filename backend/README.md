@@ -80,6 +80,26 @@ repository root, run `.venv/Scripts/python.exe backend/migrate.py`, then
 For automatic local reload, use
 `../.venv/Scripts/python.exe -m flask --app app run --debug --port 5000`.
 
+To use Uvicorn, install the requirements, activate the workspace virtual
+environment and run the ASGI entry point from `backend`:
+
+```powershell
+../.venv/Scripts/python.exe -m pip install -r requirements.txt
+../.venv/Scripts/Activate.ps1
+python migrate.py
+uvicorn main:app --reload --port 5000
+```
+
+`main.py` wraps the existing Flask application with `asgiref.wsgi.WsgiToAsgi`;
+routes, database configuration, cookies and authorization remain in Flask.
+Without activation, use
+`../.venv/Scripts/python.exe -m uvicorn main:app --reload --port 5000`.
+
+Port 5000 serves only the backend: `/` returns API information as JSON and
+`/api/health` checks the database. Frontend routes and built assets return 404
+on this port. Start the frontend separately with `npm run dev -- --port 5173
+--strictPort` from `frontend`, then open `http://127.0.0.1:5173`.
+
 ### Account registration
 
 The frontend provides `/register/student-parent` and `/register/other`, linked
@@ -89,6 +109,14 @@ community users can sign in immediately. Bureau and administrative roles create
 pending access requests; they never grant themselves a staff role or bureau.
 An existing administrator reviews these requests in Administration and records
 the approved role, required bureau, approval reference and reason.
+
+System administrator is excluded from registration. The application supports
+one administrator identity with its own password, using the normal sign-in
+page. Additional administrator accounts, promotions and expiring admin-role
+assignments are rejected. Migration `61b37e20a4f8` enforces a single primary
+administrator in the database. Existing credentials are preserved. On a fresh,
+empty system, bootstrap that one account with the interactive `create-user`
+CLI command; passwords are never hardcoded into the frontend or backend.
 
 Apply migrations before starting the updated backend; revision `8d42c1e7a905`
 adds the requested role and organization fields. Registration never seeds cases,

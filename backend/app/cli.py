@@ -110,6 +110,8 @@ def register(app):
     def create_user(email, name, role, bureau, password):
         """Provision an account locally; administrator accounts have no case access."""
         from .api import hasher
+        if role == "admin" and db.session.scalar(select(User.id).where(User.role == "admin")):
+            raise click.ClickException("The system administrator account already exists. Additional administrator accounts are not permitted.")
         if len(password) < 12 or role in ("officer", "lead") and not db.session.get(Bureau, bureau):
             raise click.ClickException("A 12-character password and valid bureau for officers/leads are required.")
         db.session.add(User(name=name, email=email.lower(), password_hash=hasher.hash(password), role=role, bureau_id=bureau))

@@ -41,7 +41,7 @@ def test_public_registration_persists_and_starts_empty(app, client, kind):
     assert client.get("/api/account/summary").json["total"] == 0
 
 
-@pytest.mark.parametrize("kind", ["officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"])
+@pytest.mark.parametrize("kind", ["officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor"])
 def test_staff_signup_does_not_grant_requested_privilege(app, client, kind):
     assert client.post("/api/auth/register", json=payload(kind)).status_code == 201
     auth = client.post("/api/auth/login", json={"email": "new.account@example.com", "password": "PersonalPassphrase!2026"})
@@ -74,7 +74,7 @@ def test_duplicate_email_is_case_insensitive(client):
 
 
 @pytest.mark.parametrize("changes", [
-    {"account_type": "superadmin"}, {"email": "invalid-email"},
+    {"account_type": "superadmin"}, {"account_type": "admin"}, {"email": "invalid-email"},
     {"password": "short", "confirm_password": "short"}, {"confirm_password": "DifferentPassphrase!2026"},
     {"bureau_id": 1}, {"role": "admin"}, {"account_type": "officer", "organization": ""},
 ])
@@ -88,3 +88,29 @@ def test_invalid_signup_does_not_create_account(app, client, changes):
 
 def test_cross_origin_signup_is_rejected(client):
     assert client.post("/api/auth/register", json=payload(), headers={"Origin": "https://untrusted.example"}).status_code == 403
+
+
+def test_only_existing_administrator_can_sign_in_and_no_second_admin_can_be_created(app, client):
+    from datetime import timedelta
+    from sqlalchemy.exc import IntegrityError
+    from app.models import now
+    headers = login(client, "admin@onecase.demo")
+    approval = {"approval_reference": "APPROVAL-TEST-001", "reason": "Single administrator policy test"}
+    assert client.post("/api/admin/users", headers=headers, json={
+        **approval, "name": "Second Admin", "email": "second-admin@example.com", "password": "PrivatePassphrase!2026", "role": "admin",
+    }).status_code == 422
+    with app.app_context():
+        officer_id = db.session.scalar(select(User.id).where(User.email == "officer.rb@onecase.demo"))
+    assert client.patch(f"/api/admin/users/{officer_id}", headers=headers, json={**approval, "role": "admin"}).status_code == 422
+    assert client.post("/api/admin/roles", headers=headers, json={
+        **approval, "user_id": officer_id, "role": "admin", "expires_at": (now() + timedelta(hours=1)).isoformat(),
+    }).status_code == 422
+    result = app.test_cli_runner().invoke(args=["create-user", "--email", "second-admin@example.com", "--name", "Second Admin", "--role", "admin", "--password", "PrivatePassphrase!2026"])
+    assert result.exit_code != 0 and "already exists" in result.output
+    with app.app_context():
+        original = db.session.scalar(select(User).where(User.role == "admin"))
+        db.session.add(User(name="Racing Admin", email="racing-admin@example.com", password_hash=original.password_hash, role="admin"))
+        with pytest.raises(IntegrityError):
+            db.session.flush()
+        db.session.rollback()
+        assert db.session.scalar(select(func.count()).select_from(User).where(User.role == "admin")) == 1

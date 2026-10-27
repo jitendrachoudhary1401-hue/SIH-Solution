@@ -119,6 +119,8 @@ def admin_workspace():
 def create_account():
     admin_access()
     data = parse(AccountInput)
+    if data.role == "admin":
+        abort(422, description="Only one system administrator account is supported. Use the existing administrator account.")
     from .models import Bureau
     if data.role not in ROLES | PUBLIC_ROLES or "@" not in data.email or data.role in ("officer", "lead") and not db.session.get(Bureau, data.bureau_id):
         abort(422, description="Choose a valid role, email and required bureau.")
@@ -144,6 +146,8 @@ def update_account(user_id):
     if user.id == g.user.id and (data.active is False or data.role and data.role != "admin"):
         abort(422, description="An administrator cannot remove its own current administrative access.")
     if data.role is not None:
+        if data.role == "admin" and user.role != "admin":
+            abort(422, description="Additional system administrator accounts are not permitted.")
         if data.role not in ROLES | PUBLIC_ROLES:
             abort(422, description="Unknown roles default to denial.")
         user.role = data.role
@@ -185,6 +189,8 @@ def create_permission():
 def assign_role():
     admin_access()
     data = parse(RoleInput)
+    if data.role == "admin":
+        abort(422, description="System administrator access cannot be assigned as an additional role.")
     if data.role not in ROLES or not db.session.get(User, data.user_id) or not data.expires_at.tzinfo or data.expires_at <= now():
         abort(422, description="A known role, user and future expiry are required.")
     db.session.add(RoleAssignment(**data.model_dump(), approved_by=g.user.id))

@@ -33,13 +33,18 @@ test('student and parent registration saves real accounts with empty workspaces'
 
 test('staff registration persists an access request without staff privileges', async ({ page }) => {
   await page.goto('/register/other');
-  await page.getByLabel('Account type').selectOption('admin');
-  await fillRegistration(page, 'browser-admin-request@example.com');
+  await expect(page.getByLabel('Account type').locator('option[value="admin"]')).toHaveCount(0);
+  expect((await page.request.post('/api/auth/register', {data: {
+    name: 'Rejected admin', email: 'public-admin@example.com', account_type: 'admin', organization: 'Example institution',
+    password: 'PersonalPassphrase!2026', confirm_password: 'PersonalPassphrase!2026',
+  }})).status()).toBe(422);
+  await page.getByLabel('Account type').selectOption('officer');
+  await fillRegistration(page, 'browser-officer-request@example.com');
   await page.getByLabel('Organization', {exact: true}).fill('Example institution');
   await page.getByRole('button', {name: 'Create account', exact: true}).click();
   await expect(page.getByRole('heading', {name: 'Account created', exact: true})).toBeVisible();
   await page.getByRole('link', {name: 'Continue to sign in'}).click();
-  await page.getByLabel('Email address', {exact: true}).fill('browser-admin-request@example.com');
+  await page.getByLabel('Email address', {exact: true}).fill('browser-officer-request@example.com');
   await page.getByLabel('Password', {exact: true}).fill('PersonalPassphrase!2026');
   await page.getByRole('button', {name: 'Sign in to workspace'}).click();
   await expect(page.getByText('Access request awaiting approval', {exact: true})).toBeVisible();
