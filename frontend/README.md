@@ -54,10 +54,12 @@ Keep individual uploads within the backend's deployed limit (default 3 MiB) and 
 ## Install as an app
 
 The production build includes `/manifest.webmanifest`, 192px/512px launcher
-icons, and an Apple touch icon. Installation uses the browser's own address-bar
-icon, install menu, or native promotion. There is no custom install button or
-instructions dialog, and the app does not intercept `beforeinstallprompt` or
-cancel the browser's default installation behavior.
+icons, and an Apple touch icon. When Chrome/Edge supplies a native installation
+offer, **Install OneCase** opens that browser dialog directly from a click.
+There is no instructions popup. The button stays hidden when the browser has
+not offered installation, after its one-use offer is consumed, or inside an
+installed app. The listener does not cancel the browser's own install promotion;
+the address-bar icon and browser menu remain controlled by the browser.
 
 After deployment, open the HTTPS hostname in a regular Chrome/Edge browser
 (Android or desktop) to install, or use Safari's Share → Add to Home Screen on
