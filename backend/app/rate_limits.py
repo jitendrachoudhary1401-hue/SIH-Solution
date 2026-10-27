@@ -26,7 +26,7 @@ def configure(app):
         if endpoint in {"frontend", "health"}:
             continue
         wrapped = writes(view)
-        if endpoint == "api.login":
+        if endpoint in {"api.login", "api.signup"}:
             wrapped = limiter.limit(os.getenv("RATE_LIMIT_LOGIN", "5 per minute"), override_defaults=False)(wrapped)
         elif endpoint == "api.upload":
             wrapped = limiter.limit("10 per hour", override_defaults=False)(wrapped)

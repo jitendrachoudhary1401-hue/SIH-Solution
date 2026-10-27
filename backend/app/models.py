@@ -28,6 +28,8 @@ class User(db.Model):
     email = db.Column(db.String(180), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(30), nullable=False, default="officer")
+    requested_role = db.Column(db.String(30))
+    organization = db.Column(db.String(200))
     bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"))
     active = db.Column(db.Boolean, nullable=False, default=True)
     mfa_secret = db.Column(db.Text)

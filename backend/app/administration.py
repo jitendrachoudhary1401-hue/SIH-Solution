@@ -5,7 +5,7 @@ from pydantic import Field, field_validator
 from sqlalchemy import select
 from .models import (db, now, iso, User, Session, RoleAssignment, PermissionGrant, Grant, Appointment,
                      Proceeding, Complaint, CaseConflict, MilestonePolicy, ActionEvent)
-from .auth import authenticated, require_admin, roles, ROLES, OPERATIONS
+from .auth import authenticated, require_admin, roles, ROLES, PUBLIC_ROLES, OPERATIONS
 from .api import Input, parse, user_json, hasher, event
 from .security import require_recent_auth, compromised_password
 
@@ -107,7 +107,7 @@ def admin_workspace():
     appointments = db.session.scalars(select(Appointment).order_by(Appointment.id.desc()).limit(100)).all()
     assignments = db.session.scalars(select(RoleAssignment).order_by(RoleAssignment.id.desc()).limit(100)).all()
     return {"users": [{**user_json(u), "active": u.active, "mfa_enabled": u.mfa_enabled} for u in users],
-            "roles": sorted(ROLES), "operations": sorted(OPERATIONS),
+            "roles": sorted(ROLES | PUBLIC_ROLES), "operations": sorted(OPERATIONS),
             "permissions": [{**approved_metadata(p), "operation": p.operation, "complaint_id": p.complaint_id, "bureau_id": p.bureau_id, "region": p.region} for p in permissions],
             "appointments": [{**approved_metadata(a), "proceeding_id": a.proceeding_id, "designation": a.designation, "capacity": a.capacity} for a in appointments],
             "role_assignments": [{**approved_metadata(a), "role": a.role} for a in assignments],
@@ -120,7 +120,7 @@ def create_account():
     admin_access()
     data = parse(AccountInput)
     from .models import Bureau
-    if data.role not in ROLES or "@" not in data.email or data.role in ("officer", "lead") and not db.session.get(Bureau, data.bureau_id):
+    if data.role not in ROLES | PUBLIC_ROLES or "@" not in data.email or data.role in ("officer", "lead") and not db.session.get(Bureau, data.bureau_id):
         abort(422, description="Choose a valid role, email and required bureau.")
     if compromised_password(data.password):
         abort(422, description="This password is on the compromised-password denylist.")
@@ -144,7 +144,7 @@ def update_account(user_id):
     if user.id == g.user.id and (data.active is False or data.role and data.role != "admin"):
         abort(422, description="An administrator cannot remove its own current administrative access.")
     if data.role is not None:
-        if data.role not in ROLES:
+        if data.role not in ROLES | PUBLIC_ROLES:
             abort(422, description="Unknown roles default to denial.")
         user.role = data.role
     if "bureau_id" in data.model_fields_set:

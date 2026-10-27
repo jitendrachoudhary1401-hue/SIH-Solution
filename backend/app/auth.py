@@ -8,6 +8,7 @@ from .models import (db, Complaint, Grant, Session, now, RoleAssignment, Permiss
                      Appointment, Proceeding, CaseConflict)
 
 ROLES = {"officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
+PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
 OPERATIONS = {"case.read", "case.transition", "case.transfer", "case.route", "case.packet", "documents.read",
               "case.export", "audit.read", "monitor.aggregate", "case.proceeding", "case.compliance"}
 
@@ -26,7 +27,7 @@ def roles(user=None):
     if user.id in cache:
         return cache[user.id]
     assigned = set(db.session.scalars(select(RoleAssignment.role).where(RoleAssignment.user_id == user.id, live(RoleAssignment))))
-    result = ({user.role} | assigned) & ROLES
+    result = ({user.role} | assigned) & (ROLES | PUBLIC_ROLES)
     cache[user.id] = result
     return result
 
@@ -46,6 +47,8 @@ def authenticated(fn):
         if not session or session.expires_at.replace(tzinfo=timezone.utc) <= now() or not session.user.active or now() - session.last_seen_at.replace(tzinfo=timezone.utc) > timedelta(minutes=current_app.config["SESSION_IDLE_MINUTES"]):
             abort(401, description="Your session has expired. Please sign in.")
         g.user, g.session = session.user, session
+        if g.user.role == "pending" and not request.path.startswith(("/api/auth/", "/api/account/")):
+            abort(403, description="Your staff access request is awaiting administrator approval.")
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             import hmac
             if not hmac.compare_digest(request.headers.get("X-CSRF-Token", ""), session.csrf):
@@ -170,6 +173,8 @@ def document_allowed(case, attachment, user=None):
 
 def capabilities(user):
     effective = roles(user)
+    if user.role in PUBLIC_ROLES or user.role == "pending":
+        return {"account": True, "cases": user.role != "pending", "alerts": user.role != "pending"}
     return {"register": bool(effective & {"officer", "lead"}) and bool(user.bureau_id),
             "dashboard": bool(effective & {"officer", "lead", "reviewer", "verifier", "executive", "auditor"}),
             "cases": bool(effective - {"admin"}), "institutions": bool(effective - {"admin", "committee"}),

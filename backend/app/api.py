@@ -2,6 +2,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,6 +36,14 @@ class LoginInput(Input):
     password: str = Field(min_length=1, max_length=1024)
     verification_code: str = Field(default="", max_length=100)
 
+
+class SignupInput(Input):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=180)
+    password: str = Field(min_length=12, max_length=1024)
+    confirm_password: str = Field(min_length=12, max_length=1024)
+    account_type: str
+    organization: str = Field(default="", max_length=200)
 
 class Registration(Input):
     institution_id: int = Field(gt=0)
@@ -112,6 +121,8 @@ def body():
 
 def user_json(user):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
+            "requested_role": user.requested_role, "organization": user.organization or "",
+            "approval_pending": user.role == "pending",
             "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Assigned scope",
             "roles": sorted(roles(user)), "capabilities": capabilities(user)}
 
@@ -229,6 +240,47 @@ def page(query, serializer, model):
     return {"items": [serializer(item) for item in records[:limit]], "total": total,
             "nextCursor": records[limit - 1].id if len(records) > limit else None,
             "asOf": iso(now()), "filters": request.args.to_dict()}
+
+
+@api.post("/auth/register")
+def signup():
+    from .auth import PUBLIC_ROLES, ROLES
+    from .security import compromised_password
+    data = parse(SignupInput)
+    email = data.email.lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        abort(422, description="Enter a valid email address.")
+    if data.account_type not in PUBLIC_ROLES | ROLES:
+        abort(422, description="Choose a valid account type.")
+    if data.password != data.confirm_password:
+        abort(422, description="Passwords do not match.")
+    if compromised_password(data.password):
+        abort(422, description="Choose a password that is not on the compromised-password denylist.")
+    if data.account_type in ROLES and len(data.organization) < 2:
+        abort(422, description="Enter the organization for your staff access request.")
+    if db.session.scalar(select(User.id).where(func.lower(User.email) == email)):
+        abort(409, description="An account with this email already exists. Sign in instead.")
+    # Staff signup records a request, never a privileged role or bureau grant.
+    user = User(name=data.name, email=email, password_hash=hasher.hash(data.password),
+                role=data.account_type if data.account_type in PUBLIC_ROLES else "pending",
+                requested_role=data.account_type, organization=data.organization, bureau_id=None)
+    db.session.add(user)
+    db.session.flush()
+    event(None, "account_registered", "Account registered", actor=user,
+          changes={"requested_role": data.account_type, "approval_pending": user.role == "pending"})
+    db.session.commit()
+    return {"approval_pending": user.role == "pending",
+            "message": "Account created. Sign in to view your access request." if user.role == "pending" else "Account created. You can now sign in."}, 201
+
+
+@api.get("/account/summary")
+@authenticated
+def account_summary():
+    cases = select(Complaint.id).where(scope())
+    total = db.session.scalar(select(func.count()).select_from(cases.subquery()))
+    active = db.session.scalar(select(func.count()).select_from(Complaint).where(scope(), Complaint.status != "disposed"))
+    unread = db.session.scalar(select(func.count()).select_from(Notification).where(Notification.user_id == g.user.id, Notification.read_at.is_(None)))
+    return {"total": total, "active": active, "closed": total - active, "unread_alerts": unread}
 
 
 @api.post("/auth/login")
