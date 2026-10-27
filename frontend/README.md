@@ -51,6 +51,25 @@ The proxy validates write origins before forwarding them. API responses use `no-
 
 Keep individual uploads within the backend's deployed limit (default 3 MiB) and Vercel's function payload limits. Large document archives require a separate approved delivery design; do not make sensitive buckets public as a workaround.
 
+## Install as an app
+
+The production build includes `/manifest.webmanifest`, 192px/512px launcher
+icons, and an Apple touch icon. **Install OneCase** is available on the sign-in
+page and workspace. It opens the native prompt when the browser supplies one;
+otherwise it shows browser-specific installation steps. It hides in a standalone
+app window and after a successful installation in the current page.
+
+After deployment, open the HTTPS hostname in a regular Chrome/Edge browser
+(Android or desktop) to install, or use Safari's Share → Add to Home Screen on
+iPhone/iPad. The browser decides when its native prompt becomes available;
+private windows and embedded browsers may not offer it. Installation requires
+no backend change. Case records and authentication still require a connection;
+this change adds no service worker or offline cache of private data.
+
+Verify `/manifest.webmanifest` returns JSON and both `/icons/icon-192.png` and
+`/icons/icon-512.png` load from the deployed hostname. In Chrome DevTools,
+Application → Manifest shows any installability errors.
+
 ## Checks
 
 The sign-in page includes a **Demo accounts** role chooser. The backend must
