@@ -73,6 +73,28 @@ Finish browser OAuth when prompted. `neon deploy` provisions the private bucket 
 
 ## Migrate and run
 
+This backend is a Flask WSGI application, launched with Waitress. From the
+repository root, run `.venv/Scripts/python.exe backend/migrate.py`, then
+`npm start`. From `backend`, using the root virtual environment, run
+`../.venv/Scripts/python.exe migrate.py`, then `../.venv/Scripts/python.exe serve.py`.
+For automatic local reload, use
+`../.venv/Scripts/python.exe -m flask --app app run --debug --port 5000`.
+
+### Account registration
+
+The frontend provides `/register/student-parent` and `/register/other`, linked
+from sign-in. Both submit to `POST /api/auth/register` and persist accounts with
+Argon2 password hashes. Students, parents, faculty, institution staff and other
+community users can sign in immediately. Bureau and administrative roles create
+pending access requests; they never grant themselves a staff role or bureau.
+An existing administrator reviews these requests in Administration and records
+the approved role, required bureau, approval reference and reason.
+
+Apply migrations before starting the updated backend; revision `8d42c1e7a905`
+adds the requested role and organization fields. Registration never seeds cases,
+grants, notifications or other demonstration records. The personal workspace
+reads counts from `/api/account/summary`, scoped to the signed-in account.
+
 Run these commands from `backend` after the local setup above:
 
 ```powershell

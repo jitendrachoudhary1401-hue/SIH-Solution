@@ -45,6 +45,7 @@ class SignupInput(Input):
     account_type: str
     organization: str = Field(default="", max_length=200)
 
+
 class Registration(Input):
     institution_id: int = Field(gt=0)
     owner_id: int = Field(gt=0)
