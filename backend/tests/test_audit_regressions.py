@@ -235,3 +235,34 @@ def test_known_password_seed_cannot_run_in_production(app):
     with app.app_context():
         for command in (lambda:seed_demo('OneCaseDemo!2026'),configure_demo_access):
             with pytest.raises(click.ClickException,match='disabled in production'): command()
+
+
+def test_authenticated_proxy_handles_render_tls_termination_without_trusting_other_origins(app,client):
+    secret='synthetic-proxy-secret-for-render-testing'
+    app.config.update(APP_ENV='production',COOKIE_SECURE=True,FRONTEND_PROXY_SECRET=secret)
+    payload={'email':'officer.rb@onecase.demo','password':'TestPassword!2026'}
+    headers={'Origin':'https://backend.example.test','X-OneCase-Proxy-Key':secret,'X-OneCase-Client-IP':'198.51.100.5'}
+    # Render's internal connection is HTTP; the real browser-facing origin is HTTPS.
+    assert client.post('/api/auth/login',base_url='http://backend.example.test',headers=headers,json=payload).status_code==200
+    assert client.post('/api/auth/login',base_url='http://backend.example.test',
+        headers={**headers,'Origin':'https://untrusted.example.test'},json=payload).status_code==403
+    assert client.post('/api/auth/login',base_url='http://backend.example.test',
+        headers={**headers,'X-OneCase-Proxy-Key':'wrong'},json=payload).status_code==403
+
+
+@pytest.mark.parametrize('chunks,state',[
+    ([b'stream: ',b'OK\0'],'clean'),
+    ([b'stream: synthetic-malware FOUND\0'],'rejected'),
+    ([b'garbage OK\0'],'pending'),
+    ([b'stream: OK'],'pending'),
+])
+def test_scanner_accepts_only_a_complete_valid_protocol_reply(app,tmp_path,chunks,state):
+    from unittest.mock import MagicMock
+    from app.documents import scan_file
+    evidence=tmp_path/'scanner.pdf'; evidence.write_bytes(b'%PDF-synthetic')
+    connection=MagicMock()
+    connection.__enter__.return_value=connection
+    connection.recv.side_effect=[*chunks,b'']
+    with app.app_context(),patch('app.documents.socket.create_connection',return_value=connection):
+        app.config['CLAMAV_HOST']='synthetic-scanner'
+        assert scan_file(evidence)[0]==state

@@ -9,6 +9,29 @@ and start `python serve.py`. Existing services not managed by this Blueprint
 need the same branch and Auto-Deploy settings entered once in Render.
 See [GitHub deployment instructions](../.github/README.md).
 
+The Blueprint also defines `onecase-worker` (Python background worker) and
+`onecase-scanner` (private ClamAV TCP service) on Render. The worker installs
+`requirements-models.txt`, downloads the committed model revisions, and receives
+server-side configuration from the API service. It runs matching, deadline and
+milestone reminders, evidence validation/scanning, and a database heartbeat.
+Administration shows queue counts and recent worker liveness. Scanner configuration
+alone does not establish that its signatures are ready; evidence stays quarantined
+until the scanner returns a complete, valid clean response.
+
+Production requires PostgreSQL, private Neon storage credentials, shared Redis,
+secure cookies, a valid Fernet key, and random `SECRET_KEY` and
+`FRONTEND_PROXY_SECRET` values of at least 32 characters. Configure the latter
+identically on Render and Vercel's server environment. These values never belong
+in browser variables. Fresh privileged accounts receive a restricted MFA setup
+session; they cannot open case or administrative APIs before enrollment succeeds.
+Known-password local seed commands are rejected in production. Opt-in public
+demo identities retain their separate synthetic scope and random credentials.
+
+Apply migration `e9c54a830bf1` for worker heartbeat reporting. It follows the
+existing stakeholder/closure migration `c7b409d2e106`. The API's Render pre-deploy
+command applies this migration before release; no destructive schema changes
+are required.
+
 ## Local setup
 
 Run from the repository root:

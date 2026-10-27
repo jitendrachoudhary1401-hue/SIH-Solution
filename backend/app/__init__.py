@@ -121,14 +121,24 @@ def create_app(config=None):
         from uuid import uuid4
         g.request_id = uuid4().hex
         proxy_secret = app.config["FRONTEND_PROXY_SECRET"]
+        import hmac
+        trusted_proxy = bool(proxy_secret and hmac.compare_digest(proxy_secret, request.headers.get("X-OneCase-Proxy-Key", "")))
         if proxy_secret and app.config["APP_ENV"] == "production" and request.path.startswith("/api/") and request.path != "/api/health":
-            import hmac
-            if not hmac.compare_digest(proxy_secret, request.headers.get("X-OneCase-Proxy-Key", "")):
+            if not trusted_proxy:
                 abort(403, description="Use the configured application origin to access this service.")
         if request.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("Origin")
-            if origin and origin.rstrip("/") != request.host_url.rstrip("/"):
-                abort(403, description="Cross-origin write requests are not permitted.")
+            if origin:
+                if trusted_proxy:
+                    from urllib.parse import urlsplit
+                    external = urlsplit(origin)
+                    # Render terminates HTTPS before forwarding HTTP to Waitress.
+                    # Only our authenticated proxy may bridge that scheme change.
+                    if (external.netloc.lower() != request.host.lower() or external.username or external.password
+                            or external.scheme not in ({"https"} if app.config["APP_ENV"] == "production" else {"http", "https"})):
+                        abort(403, description="Cross-origin write requests are not permitted.")
+                elif origin.rstrip("/") != request.host_url.rstrip("/"):
+                    abort(403, description="Cross-origin write requests are not permitted.")
             if request.headers.get("Sec-Fetch-Site") == "cross-site":
                 abort(403, description="Cross-site write requests are not permitted.")
 

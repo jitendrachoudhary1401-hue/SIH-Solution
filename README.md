@@ -1,6 +1,6 @@
 # OneCase
 
-An officer workspace for accountable institution-complaint coordination. The application uses a warm, light-only interface, larger text and sharp controls. The supplied AICTE image is used as the logo and favicon.
+An officer workspace for accountable institution-complaint coordination. The application uses a warm, light-only interface, larger text and sharp controls. Its circular OneCase logo shows connected case records and a resolution checkmark in terracotta, cream and ochre.
 
 | Component | Implementation / deployment |
 | --- | --- |
@@ -21,6 +21,7 @@ Deploy **only `frontend` to Vercel** and **only `backend` to Render**, using tho
 - [GitHub workflow guide](.github/README.md)
 - [Neon setup and actual service verification](docs/NEON_SETUP.md)
 - [Database schema and migration notes](docs/DATABASE_SCHEMA.md)
+- [Code audit, repairs and release checks](docs/CODE_AUDIT_AND_REPAIRS.md)
 
 ## Local commands
 

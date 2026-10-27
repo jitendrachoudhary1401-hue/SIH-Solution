@@ -28,7 +28,16 @@ Vercel needs `BACKEND_URL` pointing to the Render API and
 credentials, application secrets, and shared Redis configuration. Set
 `PUBLIC_APP_URL` on Render to the HTTPS Vercel hostname for password reset links.
 Configure SendGrid privately if password reset email is used. Keep
-`FRONTEND_PROXY_SECRET` identical on both platforms when enabled.
+`FRONTEND_PROXY_SECRET` identical on both platforms (required in production,
+random, at least 32 characters).
+
+The Render Blueprint now includes the backend worker and a private ClamAV scanner.
+Apply/sync `backend/render.yaml` to create these services; pushing files alone
+does not add services to an unmanaged Render API. The selected worker and scanner
+plans need sufficient memory and use paid Render resources; review the Blueprint
+in Render before applying it. Existing private values with `sync: false` must be
+entered in the service dashboard when adding them to an existing Blueprint.
+Vercel continues to host only the frontend and its same-origin server-side proxy.
 
 ## Each release
 

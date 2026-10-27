@@ -50,6 +50,9 @@ Preserve existing private environment files. A fresh workstation needs `backend/
 - `STORAGE_BACKEND=neon`, `STORAGE_BUCKET=assets`.
 - Random `SECRET_KEY` and valid Fernet `MFA_ENCRYPTION_KEY`.
 - `APP_ENV=production`, `COOKIE_SECURE=true`, `API_HOST=0.0.0.0`.
+- Required shared `FRONTEND_PROXY_SECRET` of at least 32 random characters,
+  identical to the Vercel server-side value. Production startup rejects an absent
+  or short value, local SQLite, and incomplete private-storage configuration.
 - A shared `RATE_LIMIT_STORAGE_URI` (Redis); optional configured proxy secret.
 - Worker/scanner/model settings for the separate background worker.
 
@@ -57,7 +60,7 @@ Preserve existing private environment files. A fresh workstation needs `backend/
 
 - `VITE_API_BASE_URL=/api`.
 - `BACKEND_URL=https://YOUR-RENDER-SERVICE.onrender.com`.
-- Matching `FRONTEND_PROXY_SECRET` if configured on Render.
+- Required matching `FRONTEND_PROXY_SECRET` (server-only, at least 32 characters).
 
 Do not put database URLs or service keys in any `VITE_*` variable. The serverless API proxy inside `frontend/api` reads `BACKEND_URL`; the browser bundle does not contain Neon credentials.
 
@@ -68,8 +71,23 @@ Do not put database URLs or service keys in any `VITE_*` variable. The serverles
 3. Deploy Render with its private environment settings; check `/api/health`.
 4. Provision approved officer accounts and complete required privileged MFA/recovery setup.
 5. Deploy Vercel with Root Directory `frontend` and its backend URL; set Render Root Directory to `backend`.
-6. Start/configure the worker, private scanner, model artifacts and shared Redis.
+6. Apply/sync the Blueprint's Render worker and private scanner services. The worker
+   installs model dependencies and the pinned `backend/model-bundle.json` artifacts
+   at build time. Its private environment values reference the API. Review the
+   selected Render plans before applying: ClamAV needs 3-4 GiB for signature reloads.
+   Supply a working shared Redis URI to the API; the worker inherits it.
 7. Check sign-in, registration, authorized case access, a rejected direct cross-bureau request, upload quarantine, post-scan download, and logout.
+
+Fresh privileged accounts first see authenticator enrollment. The short setup
+session cannot read workspace records. After a valid TOTP code, save the recovery
+codes and continue; the server rotates the cookie and CSRF token. Never disable
+the production MFA requirement to get around account setup.
+
+Use Administration's institution review tab to confirm an unverified institution
+from an authorized source. Preserve its exact identifier and record approval and
+reason. Existing records are never automatically merged; verification requeues
+matching failures for that institution. Inspect `/api/operations` as an administrator
+for worker heartbeats and backlog. `/api/health` alone checks database connectivity.
 
 ## Verification status and remaining setup
 

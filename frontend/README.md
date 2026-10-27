@@ -1,6 +1,6 @@
 # OneCase frontend — Vercel
 
-React, TypeScript and Vite provide the officer workspace. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text, and uses the supplied `public/logo.png` as its logo and favicon.
+React, TypeScript and Vite provide the officer workspace. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text. The square `public/onecase-logo.png` contains the circular case-coordination mark; proportional favicon and launcher sizes live under `public/icons/onecase-*.png`.
 
 ## Local setup
 
@@ -35,7 +35,7 @@ Only `VITE_*` variables are intentionally exposed to browser code. **Never put d
 | --- | --- |
 | `VITE_API_BASE_URL` | `/api` |
 | `BACKEND_URL` | Your Render web-service URL, such as `https://your-api.onrender.com`, without `/api` |
-| `FRONTEND_PROXY_SECRET` | The same long random value configured on Render, if proxy protection is enabled |
+| `FRONTEND_PROXY_SECRET` | Required: the same random value of at least 32 characters configured on Render; server-only |
 
 6. Deploy, then verify `/officer/login`, a direct navigation to `/complaints`, and `/api/health` on the **Vercel** hostname.
 
@@ -68,11 +68,16 @@ private windows and embedded browsers may not offer it. Installation requires
 no backend change. Case records and authentication still require a connection;
 this change adds no service worker or offline cache of private data.
 
-Verify `/manifest.webmanifest` returns JSON and both `/icons/icon-192.png` and
-`/icons/icon-512.png` load from the deployed hostname. In Chrome DevTools,
+Verify `/manifest.webmanifest` returns JSON and both `/icons/onecase-192.png` and
+`/icons/onecase-512.png` load from the deployed hostname. In Chrome DevTools,
 Application → Manifest shows any installability errors.
 
 ## Checks
+
+Privileged production accounts complete a restricted ten-minute authenticator
+enrollment flow after password verification. Workspace APIs remain inaccessible
+until confirmation. Confirmation rotates the session and CSRF token; the screen
+keeps recovery codes visible until the user confirms they have saved them.
 
 The sign-in page includes a **Demo accounts** role chooser. The backend must
 have `DEMO_ACCOUNTS_ENABLED=true` and provisioned demo identities. No demo
