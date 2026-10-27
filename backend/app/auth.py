@@ -92,10 +92,16 @@ def active_appointments(user=None):
 
 def scope(user=None, aggregate=False):
     user = user or g.user
+    if user.role in PUBLIC_ROLES:
+        return Complaint.submitter_user_id == user.id
+    if "admin" in roles(user):
+        return Complaint.id > 0
     effective = roles(user)
     grants = select(Grant.complaint_id).where(Grant.user_id == user.id, live(Grant))
     proceedings = select(Proceeding.complaint_id).where(Proceeding.id.in_(active_appointments(user).with_only_columns(Appointment.proceeding_id)))
     bureau = Complaint.bureau_id == user.bureau_id if effective & {"officer", "lead"} and user.bureau_id else Complaint.id == -1
+    if "lead" not in effective:
+        bureau = and_(bureau, or_(Complaint.submitter_user_id.is_(None), Complaint.owner_id == user.id))
     conflict = select(CaseConflict.complaint_id).where(CaseConflict.user_id == user.id, CaseConflict.resolved_at.is_(None))
     conditions = [bureau, Complaint.id.in_(grants), permission_scope("case.read", user)]
     if "committee" in effective:
@@ -115,6 +121,10 @@ def has_permission(case, operation, user=None):
 
 def has_content(case, user=None):
     user = user or g.user
+    if user.role in PUBLIC_ROLES:
+        return case.submitter_user_id == user.id
+    if "admin" in roles(user):
+        return True
     if roles(user) & {"officer", "lead"} and case.bureau_id == user.bureau_id:
         return True
     grant = db.session.scalar(select(Grant).where(Grant.user_id == user.id, Grant.complaint_id == case.id, live(Grant)))
@@ -123,11 +133,15 @@ def has_content(case, user=None):
 
 def allowed(case, operation, user=None):
     user = user or g.user
+    if user.role in PUBLIC_ROLES:
+        return False
     effective = roles(user)
     if not effective or not db.session.scalar(select(Complaint.id).where(Complaint.id == case.id, scope(user))):
         return False
     owner = "officer" in effective and case.owner_id == user.id
     lead = "lead" in effective and case.bureau_id == user.bureau_id
+    if operation == 'case.transfer' and 'admin' in effective:
+        return True
     if operation in ("case.edit", "case.action"):
         return owner or lead
     if operation == "case.transfer":
@@ -170,6 +184,10 @@ def proceeding_allowed(proceeding, operation="read", user=None):
 
 def document_allowed(case, attachment, user=None):
     user = user or g.user
+    if user.role in PUBLIC_ROLES:
+        return case.submitter_user_id == user.id
+    if "admin" in roles(user):
+        return True
     if allowed(case, "documents.read", user):
         return attachment.sensitivity == "standard" or has_permission(case, "documents.read", user)
     if attachment.proceeding_id:
@@ -181,11 +199,11 @@ def document_allowed(case, attachment, user=None):
 def capabilities(user):
     effective = roles(user)
     if user.role in PUBLIC_ROLES or user.role == "pending":
-        return {"account": True, "cases": user.role != "pending", "alerts": user.role != "pending"}
+        return {"account": True, "cases": user.role != "pending", "alerts": user.role != "pending", "submit_complaint": user.role in PUBLIC_ROLES}
     return {"register": bool(effective & {"officer", "lead"}) and bool(user.bureau_id),
             "dashboard": bool(effective & {"officer", "lead", "reviewer", "verifier", "executive", "auditor"}),
-            "cases": bool(effective - {"admin"}), "institutions": bool(effective - {"admin", "committee"}),
-            "overlaps": "reviewer" in effective, "alerts": bool(effective - {"admin"}),
+            "cases": bool(effective), "institutions": bool(effective - {"admin", "committee"}),
+            "overlaps": "reviewer" in effective, "alerts": bool(effective),
             "audit": bool(effective - {"admin", "executive"}), "reports": bool(effective & {"officer", "lead", "executive", "auditor"}),
             "admin": "admin" in effective}
 

@@ -24,6 +24,8 @@ services:
         value: assets
       - key: MAX_UPLOAD_BYTES
         value: "3145728"
+      - key: PUBLIC_INTAKE_OWNER_ID
+        value: "0"
       - key: SECRET_KEY
         sync: false
       - key: MFA_ENCRYPTION_KEY

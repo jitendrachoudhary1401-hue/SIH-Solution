@@ -16,6 +16,7 @@ backend/.runtime/
 playwright-report/
 test-results/
 *.tsbuildinfo
+tmp/
 .agents
 files
 .codex

@@ -29,7 +29,9 @@ test('officer creates, acts on, disposes, reopens, and transfers a case', async 
   await expect(page.getByText('Officer action recorded', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Evidence', exact: true }).click();
   await page.getByLabel('Upload supporting evidence').setInputFiles('tests/fixtures/synthetic-outcome.png');
+  const uploaded = page.waitForResponse(r => r.url().endsWith('/attachments') && r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Upload evidence', exact: true }).click();
+  expect((await uploaded).status()).toBe(201);
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Change status', exact: true }).click();
   await dialog.getByLabel('New status').selectOption('disposed');

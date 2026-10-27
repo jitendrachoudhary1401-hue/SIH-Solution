@@ -19,6 +19,19 @@ try:
         reader = PdfReader(io.BytesIO(content), strict=True)
         if reader.is_encrypted or len(reader.pages) > 50 or len(reader.pages) == 0:
             raise ValueError()
+    elif sys.argv[2] in ('video/mp4', 'video/webm'):
+        import av
+        with av.open(io.BytesIO(content), mode='r', format='mov' if sys.argv[2] == 'video/mp4' else 'matroska',
+                     options={'protocol_whitelist': 'pipe', 'enable_drefs': '0', 'use_absolute_path': '0'}) as container:
+            if not container.streams.video or not container.duration or container.duration > 300 * av.time_base:
+                raise ValueError()
+            stream = container.streams.video[0]
+            stream.codec_context.thread_count = 1
+            if not 0 < stream.width * stream.height <= 1920 * 1080:
+                raise ValueError()
+            frame = next(container.decode(stream))
+            if not frame.width or not frame.height:
+                raise ValueError()
     else:
         from PIL import Image
         Image.MAX_IMAGE_PIXELS = 15000000

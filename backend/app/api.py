@@ -22,7 +22,7 @@ from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
 DUMMY_HASH = hasher.hash("not-a-real-account-secret")
-CATEGORIES = ["Fee refund", "Admissions", "Infrastructure", "Faculty", "Examination", "Other"]
+CATEGORIES = ["Fee refund", "Admissions", "Infrastructure", "Faculty", "Examination", "Ragging", "Other"]
 TRANSITIONS = {"received": ["under_review", "disposed"], "under_review": ["awaiting_information", "disposed"],
                "awaiting_information": ["under_review", "disposed"], "disposed": ["under_review"]}
 
@@ -93,6 +93,7 @@ class TransferChange(Change):
 
 class ActionChange(Change):
     next_action: str = Field(default="", max_length=500)
+    evidence_ids: list[int] = Field(default_factory=list, max_length=30)
 
 
 class OrdinaryChange(Change):
@@ -169,6 +170,10 @@ def case_json(case, detail=False):
         result["can_export"] = allowed(case, "case.export")
         result["can_read_documents"] = allowed(case, "documents.read")
         result["has_content"] = content
+        from .models import ComplaintReport
+        result['can_upload'] = case.status != 'disposed' and (case.submitter_user_id == g.user.id or allowed(case, 'case.edit'))
+        result['max_upload_bytes'] = current_app.config['MAX_UPLOAD_BYTES']
+        result['reports'] = [{'id': r.id, 'created_at': iso(r.created_at), 'checksum': r.checksum} for r in db.session.scalars(select(ComplaintReport).where(ComplaintReport.complaint_id == case.id).order_by(ComplaintReport.id.desc()))]
         if content:
             result.update(affected_person=case.affected_person, submitter_name=case.submitter_name,
                           representation_basis=case.representation_basis, prior_proceedings=case.prior_proceedings,
@@ -177,10 +182,22 @@ def case_json(case, detail=False):
 
 
 def event(case, kind, summary, reason="", changes=None, actor=None):
-    actor = actor or getattr(g, "user", None)
+    actor = None if actor is False else actor or getattr(g, "user", None)
+    changes = dict(changes or {})
+    evidence_ids = list(changes.get('evidence_ids', []))
+    for key in ('attachment_id', 'outcome_document_id', 'delivery_attachment_id'):
+        if changes.get(key):
+            evidence_ids.append(changes[key])
+    if changes.get('record_id'):
+        from .models import ProceedingRecord
+        record = db.session.get(ProceedingRecord, changes['record_id'])
+        if record and record.attachment_id:
+            evidence_ids.append(record.attachment_id)
+    if evidence_ids:
+        changes['evidence_ids'] = sorted(set(evidence_ids))
     item = ActionEvent(complaint_id=case.id if case else None, actor_id=actor.id if actor else None,
                        actor_name=actor.name if actor else "OneCase worker", bureau_id=case.bureau_id if case else None,
-                       kind=kind, summary=summary, reason=reason, changes=changes or {}, request_id=getattr(g, "request_id", ""))
+                       kind=kind, summary=summary, reason=reason, changes=changes, request_id=getattr(g, "request_id", ""))
     db.session.add(item)
     return item
 
@@ -190,7 +207,8 @@ def event_json(item):
             "reference": item.complaint.reference if item.complaint else None, "actor": item.actor_name,
             "kind": item.kind, "summary": item.summary, "reason": item.reason,
             "changes": item.changes, "outcome": item.outcome, "severity": item.severity,
-            "created_at": iso(item.created_at)}
+            "created_at": iso(item.created_at), "actor_id": item.actor_id,
+            "proof": [{"id": a.id, "filename": a.filename, "scan_state": a.scan_state} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == item.complaint_id, Attachment.id.in_(item.changes.get('evidence_ids', []) + ([item.changes['attachment_id']] if item.changes.get('attachment_id') else [])))) if item.complaint and document_allowed(item.complaint, a)]}
 
 
 def enqueue(case):
@@ -252,7 +270,7 @@ def signup():
     if data.account_type == "admin":
         abort(422, description="System administrator registration is not available. Use the existing administrator sign-in.")
     email = data.email.lower()
-    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+    if email.endswith(("@onecase.internal", "@onecase.demo")) or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         abort(422, description="Enter a valid email address.")
     if data.account_type not in PUBLIC_ROLES | ROLES:
         abort(422, description="Choose a valid account type.")
@@ -423,7 +441,7 @@ def register_case():
     if not roles() & {"officer", "lead"}:
         abort(403, description="Only officers may register complaints.")
     data = parse(Registration)
-    if data.complainant_type not in ("student", "faculty", "staff", "other") or data.sensitivity not in ("standard", "restricted"):
+    if data.complainant_type not in ("student", "parent", "faculty", "staff", "other") or data.sensitivity not in ("standard", "restricted"):
         abort(422, description="Choose a valid complainant type and sensitivity.")
     if data.affected_person and data.submitter_name and data.affected_person != data.submitter_name and len(data.representation_basis) < 5:
         abort(422, description="Record the representative's authorization basis.")
@@ -456,7 +474,7 @@ def register_case():
         if previous.digest != payload_digest:
             abort(409, description="This submission key was already used for different content.")
         return case_json(case_or_404(previous.complaint_id), True), 200
-    case = Complaint(reference=f"OC-{now().year}-{uuid4().hex[:10].upper()}", institution_id=institution.id,
+    case = Complaint(reference=f"OC-{now().year}-{uuid4().hex.upper()}", institution_id=institution.id,
                      category=data.category, description=data.description, priority=data.priority,
                      bureau_id=owner.bureau_id, owner_id=owner.id, received_at=data.received_at,
                      due_at=data.due_at, deadline_policy="Authorized explicit deadline v1" if data.due_at else "Deadline not set",
@@ -488,7 +506,7 @@ def register_case():
 def detail(case_id):
     case = case_or_404(case_id)
     result = case_json(case, True)
-    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id, "scan_state": a.scan_state, "scan_detail": a.scan_detail} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
+    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id, "scan_state": a.scan_state, "scan_detail": a.scan_detail, "media_type": a.media_type, "uploaded_by": a.uploaded_by, "created_at": iso(a.created_at)} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
     result["transfers"] = [{"id": t.id, "to_owner_id": t.to_owner_id, "created_at": iso(t.created_at), "acknowledged_at": iso(t.acknowledged_at)} for t in db.session.scalars(select(Transfer).where(Transfer.complaint_id == case.id).order_by(Transfer.id.desc()))]
     result["pauses"] = [{"id": p.id, "started_at": iso(p.started_at), "ended_at": iso(p.ended_at), "reason": p.reason} for p in db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id).order_by(SLAPause.id))]
     return result
@@ -519,8 +537,8 @@ def edit_case(case_id):
             if case.paused_at:
                 abort(422, description="Resume the SLA clock before revising the deadline.")
             case.deadline_config = {"mode": "elapsed", "minutes": (value - case.received_at.replace(tzinfo=timezone.utc)).total_seconds() / 60, "version": "explicit-v1", "timezone": "Asia/Kolkata"} if value else {}
-        changes[field] = {"before": iso(getattr(case, field)) if field == "due_at" else ("Previous text" if field == "description" else getattr(case, field)),
-                          "after": iso(value) if field == "due_at" else ("Revised text" if field == "description" else value)}
+        changes[field] = {"before": iso(getattr(case, field)) if field == "due_at" else getattr(case, field),
+                          "after": iso(value) if field == "due_at" else value}
         setattr(case, field, value)
     if not changes:
         abort(422, description="No fields to update.")
@@ -580,10 +598,13 @@ def change_status(case_id):
         validate_disposition(case, data)
     previous = case.status
     case.status = data.status
-    event(case, "reopened" if previous == "disposed" else "status_changed", f"Status changed to {case.status.replace('_', ' ')}",
+    closure = event(case, "reopened" if previous == "disposed" else "status_changed", f"Status changed to {case.status.replace('_', ' ')}",
           data.reason, {"status": {"before": previous, "after": case.status}, "deadline_at": iso(case.due_at), "deadline_policy": case.deadline_policy, "paused_at": iso(case.paused_at),
                         "outcome_document_id": data.outcome_document_id, "communication": data.communication,
                         "external_proceedings_continue": data.external_continues, "verifier_id": g.user.id})
+    if case.status == 'disposed':
+        from .complaint_reports import freeze_report
+        freeze_report(case, closure)
     db.session.commit()
     return case_json(case, True)
 
@@ -594,7 +615,11 @@ def add_action(case_id):
     case = case_or_404(case_id, write=True)
     data = parse(ActionChange)
     check_version(case, data.version)
-    event(case, "action_recorded", "Officer action recorded", data.reason)
+    for evidence_id in data.evidence_ids:
+        proof = db.session.get(Attachment, evidence_id)
+        if not proof or proof.complaint_id != case.id or not document_allowed(case, proof) or proof.scan_state != 'clean':
+            abort(422, description='Action proof must be an approved attachment belonging to this complaint.')
+    event(case, "action_recorded", "Officer action recorded", data.reason, {'evidence_ids': data.evidence_ids, 'next_action': data.next_action})
     if data.next_action:
         case.next_action = data.next_action
     case.version += 1
@@ -613,7 +638,7 @@ def transfer(case_id):
         abort(422, description="Transfers must stay within the same demo or operational workspace.")
     if not recipient or not recipient.active or recipient.role not in ("officer", "lead") or not recipient.bureau_id or recipient.id == case.owner_id:
         abort(422, description="Choose a different active receiving officer.")
-    old_owner, old_bureau = case.owner_id, case.bureau.code
+    old_owner, old_bureau, old_name = case.owner_id, case.bureau.code, case.owner.name
     previous = db.session.scalar(select(Assignment).where(Assignment.complaint_id == case.id, Assignment.ended_at.is_(None)))
     if previous:
         previous.ended_at = now()
@@ -623,7 +648,7 @@ def transfer(case_id):
     case.owner_id, case.bureau_id = recipient.id, recipient.bureau_id
     db.session.flush()
     event(case, "transferred", f"Transferred from {old_bureau} to {recipient.bureau.code}", data.reason,
-          {"owner_id": {"before": old_owner, "after": recipient.id}})
+          {"owner_id": {"before": old_owner, "after": recipient.id}, 'assigned_from': old_name, 'assigned_to': recipient.name})
     notify(recipient.id, case, "assignment", f"{case.reference} was assigned to you. Acknowledge receipt.", f"transfer:{receipt.id}:{recipient.id}")
     db.session.commit()
     # Return only the transfer receipt; sender access does not survive automatically.
@@ -679,8 +704,20 @@ def upload(case_id):
         proceeding = db.session.get(Proceeding, proceeding_id)
         if not proceeding or proceeding.complaint_id != case.id or not (proceeding_allowed(proceeding, "coordinate") or proceeding_allowed(proceeding, "contribute")):
             abort(403, description="A current proceeding appointment with evidence access is required.")
-    elif not allowed(case, "case.edit"):
+    elif not (case.submitter_user_id == g.user.id or allowed(case, "case.edit")):
         abort(403, description="Proceeding participants must attach files to their assigned proceeding.")
+    if case.status == 'disposed':
+        abort(409, description='This complaint is closed. Evidence can be added after an authorized reopening.')
+    upload_key = request.form.get('upload_key') or None
+    if upload_key and not 8 <= len(upload_key) <= 100:
+        abort(422, description='Invalid upload key.')
+    if upload_key:
+        previous = db.session.scalar(select(Attachment).where(Attachment.complaint_id == case.id, Attachment.upload_key == upload_key))
+        if previous:
+            item = request.files.get('file')
+            if previous.uploaded_by != g.user.id or not item or hashlib.sha256(item.read()).hexdigest() != previous.checksum:
+                abort(409, description='Upload key already used for another file.')
+            return {'ok': True, 'id': previous.id, 'version': case.version}
     try:
         check_version(case, int(request.form.get("version", "0")))
     except ValueError:
@@ -694,11 +731,11 @@ def upload(case_id):
     count = db.session.scalar(select(func.count()).select_from(Attachment).where(Attachment.complaint_id == case.id))
     if count >= current_app.config["DOCUMENT_LIMIT_PER_CASE"]:
         abort(429, description="This case has reached its evidence file limit.")
-    media = "application/pdf" if content.startswith(b"%PDF-") else "image/png" if content.startswith(b"\x89PNG\r\n\x1a\n") else "image/jpeg" if content.startswith(b"\xff\xd8\xff") else None
+    media = "application/pdf" if content.startswith(b"%PDF-") else "image/png" if content.startswith(b"\x89PNG\r\n\x1a\n") else "image/jpeg" if content.startswith(b"\xff\xd8\xff") else 'video/mp4' if content[4:8] == b'ftyp' else 'video/webm' if content.startswith(b'\x1aE\xdf\xa3') and b'webm' in content[:256] else None
     name = secure_filename(item.filename or "evidence")[:180]
     ext = Path(name).suffix.lower()
-    if not media or ext not in {"application/pdf": [".pdf"], "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"]}[media]:
-        abort(422, description="File signature and extension must match PDF, PNG or JPEG.")
+    if not media or ext not in {"application/pdf": [".pdf"], "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], 'video/mp4': ['.mp4'], 'video/webm': ['.webm']}[media]:
+        abort(422, description="File signature and extension must match PDF, PNG, JPEG, MP4 or WebM.")
     key = uuid4().hex
     from . import storage
     storage_backend, storage_bucket = storage.put(key, content, media)
@@ -706,14 +743,16 @@ def upload(case_id):
         sensitivity = request.form.get("sensitivity", "standard")
         if sensitivity not in ("standard", "restricted"):
             abort(422, description="Invalid evidence sensitivity.")
-        db.session.add(Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity, storage_backend=storage_backend, storage_bucket=storage_bucket))
-        event(case, "evidence_added", f"Evidence added: {name}")
+        attachment = Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity, storage_backend=storage_backend, storage_bucket=storage_bucket, uploaded_by=g.user.id, upload_key=upload_key)
+        db.session.add(attachment)
+        db.session.flush()
+        event(case, "evidence_added", f"Evidence added: {name}", changes={'attachment_id': attachment.id, 'checksum': attachment.checksum, 'scan_state': 'pending'})
         case.version += 1
         db.session.commit()
     except Exception:
         storage.remove(key, storage_backend, storage_bucket)
         raise
-    return {"ok": True}, 201
+    return {"ok": True, 'id': attachment.id, 'version': case.version}, 201
 
 
 @api.get("/attachments/<int:attachment_id>/download")

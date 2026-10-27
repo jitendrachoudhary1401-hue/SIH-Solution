@@ -58,5 +58,5 @@ def scan_pending(limit=10):
         item.scan_state, item.scan_detail, item.scan_checked_at = state, detail, now()
         if state != "pending":
             case = db.session.get(Complaint, item.complaint_id)
-            event(case, "evidence_scan", f"Evidence scan outcome: {state}", changes={"attachment_id": item.id, "state": state})
+            event(case, "evidence_scan", f"Evidence scan outcome: {state}", changes={"attachment_id": item.id, "state": state}, actor=False)
         db.session.commit()

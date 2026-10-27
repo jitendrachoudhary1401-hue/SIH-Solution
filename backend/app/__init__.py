@@ -44,6 +44,7 @@ def create_app(config=None):
         SECRET_KEY=os.getenv("SECRET_KEY"),
         APP_ENV=os.getenv("APP_ENV", "development"),
         DEMO_ACCOUNTS_ENABLED=os.getenv("DEMO_ACCOUNTS_ENABLED", "false").lower() == "true",
+        PUBLIC_INTAKE_OWNER_ID=int(os.getenv("PUBLIC_INTAKE_OWNER_ID") or "0"),
         MFA_ENCRYPTION_KEY=os.getenv("MFA_ENCRYPTION_KEY", ""),
         SESSION_IDLE_MINUTES=int(os.getenv("SESSION_IDLE_MINUTES", "30")),
         STEP_UP_MINUTES=int(os.getenv("STEP_UP_MINUTES", "10")),
@@ -82,12 +83,16 @@ def create_app(config=None):
     from .security import security_api
     from .password_reset import password_reset_api
     from .demo import demo_api
+    from .intake import intake_api
+    from .complaint_reports import report_api
     app.register_blueprint(api, url_prefix="/api")
     app.register_blueprint(workflow_api, url_prefix="/api")
     app.register_blueprint(administration_api, url_prefix="/api")
     app.register_blueprint(security_api, url_prefix="/api")
     app.register_blueprint(password_reset_api, url_prefix="/api")
     app.register_blueprint(demo_api, url_prefix="/api")
+    app.register_blueprint(intake_api, url_prefix="/api")
+    app.register_blueprint(report_api, url_prefix="/api")
     register(app)
 
     @app.before_request

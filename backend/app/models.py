@@ -98,6 +98,7 @@ class Complaint(db.Model):
     status = db.Column(db.String(30), nullable=False, default="received", index=True)
     bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"), nullable=False, index=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    submitter_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     received_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
     due_at = db.Column(db.DateTime(timezone=True), index=True)
     deadline_policy = db.Column(db.String(120), nullable=False, default="Illustrative elapsed-time policy v1")
@@ -111,7 +112,7 @@ class Complaint(db.Model):
     matching_error = db.Column(db.String(300))
     institution = db.relationship(Institution)
     bureau = db.relationship(Bureau)
-    owner = db.relationship(User)
+    owner = db.relationship(User, foreign_keys=[owner_id])
     __mapper_args__ = {"version_id_col": version}
     __table_args__ = (
         UniqueConstraint("id", "institution_id", name="uq_complaint_id_institution"),
@@ -173,6 +174,8 @@ class ActionEvent(db.Model):
 class Attachment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    upload_key = db.Column(db.String(100))
     filename = db.Column(db.String(200), nullable=False)
     key = db.Column(db.String(80), nullable=False, unique=True)
     storage_backend = db.Column(db.String(20), nullable=False, default="local", server_default="local")
@@ -186,7 +189,17 @@ class Attachment(db.Model):
     scan_checked_at = db.Column(db.DateTime(timezone=True))
     scan_detail = db.Column(db.String(300))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
-    __table_args__ = (UniqueConstraint("id", "complaint_id", name="uq_attachment_id_complaint"),)
+    __table_args__ = (UniqueConstraint("id", "complaint_id", name="uq_attachment_id_complaint"),
+                     UniqueConstraint("complaint_id", "upload_key", name="uq_attachment_complaint_upload_key"))
+
+
+class ComplaintReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False, index=True)
+    closure_event_id = db.Column(db.Integer, db.ForeignKey("action_event.id"), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    pdf = db.Column(db.LargeBinary, nullable=False)
+    checksum = db.Column(db.String(64), nullable=False)
 
 
 class Notification(db.Model):

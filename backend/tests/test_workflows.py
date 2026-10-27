@@ -99,17 +99,16 @@ def test_attachments_protected_and_validated(client, app, monkeypatch):
     assert client.get(f"/api/attachments/{attachment['id']}/download").status_code == 404
 
 
-def test_monitoring_deduplicates_and_admin_has_no_case_access(client, app):
+def test_monitoring_deduplicates_and_admin_can_review_case_history(client, app):
     with app.app_context():
         monitor()
         count = db.session.scalar(select(func.count()).select_from(Notification))
         monitor()
         assert db.session.scalar(select(func.count()).select_from(Notification)) == count and count > 0
     login(client, "admin@onecase.demo")
-    assert client.get("/api/complaints").json["total"] == 0
-    assert client.get("/api/dashboard/summary").json["total"] == 0
-    assert client.get("/api/complaints/1").status_code == 404
-    assert all(e["complaint_id"] is None for e in client.get("/api/audit-logs").json["items"])
+    assert client.get("/api/complaints").json["total"] > 0
+    assert client.get("/api/complaints/1").status_code == 200
+    assert any(e["complaint_id"] == 1 for e in client.get("/api/complaints/1/actions").json["items"])
 
 
 def test_officer_cannot_edit_other_owner_or_transfer(client):

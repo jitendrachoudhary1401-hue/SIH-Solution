@@ -7,13 +7,14 @@ export type Case = {
   next_action: string; version: number; content_revision: number; matching_state: string; matching_error: string | null;
   paused_at: string | null; deadline_config: Record<string, unknown>; pauses?: {id: number; started_at: string; ended_at: string | null; reason: string}[];
   can_edit?: boolean; can_transfer?: boolean; allowed_transitions?: string[];
+  can_upload?: boolean; max_upload_bytes?: number; reports?: { id: number; created_at: string; checksum: string }[];
   can_transition?: boolean; can_route?: boolean; can_proceeding?: boolean; can_compliance?: boolean; can_export?: boolean; can_read_documents?: boolean;
   issue_summary: string; complainant_type: string; source_channel: string; source_reference: string; entered_at: string;
   affected_person?: string; submitter_name?: string; representation_basis?: string; prior_proceedings?: string;
   attachments?: { id: number; filename: string; size: number; checksum: string; proceeding_id: number | null; scan_state: string; scan_detail: string | null }[];
   transfers?: { id: number; to_owner_id: number; created_at: string; acknowledged_at: string | null }[];
 };
-export type Event = { id: number; complaint_id: number; reference: string; actor: string; kind: string; summary: string; reason: string; changes: Record<string, unknown>; outcome: string; severity: string; created_at: string };
+export type Event = { actor_id?: number; proof?: {id: number; filename: string; scan_state: string}[]; id: number; complaint_id: number; reference: string; actor: string; kind: string; summary: string; reason: string; changes: Record<string, unknown>; outcome: string; severity: string; created_at: string };
 export type Page<T> = { items: T[]; nextCursor: number | null; total: number; asOf: string };
 export type Directory = { bureaus: { id: number; code: string; name: string }[]; officers: User[]; participants: User[]; categories: string[]; deadline_rules: {id: string; name: string}[] };
 export type Pair = { id: number; a: Case; b: Case; state: string; band: string; version: number; stale: boolean; can_review?: boolean;
