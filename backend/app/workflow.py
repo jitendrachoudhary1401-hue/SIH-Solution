@@ -125,7 +125,8 @@ def evidence_or_422(case, attachment_id, proceeding=None, clean=True):
         abort(422, description="Select evidence available within your document scope.")
     if proceeding and item.proceeding_id not in (None, proceeding.id):
         abort(422, description="Evidence belongs to another proceeding.")
-    if clean and item.scan_state != "clean":
+    from .documents import evidence_available
+    if clean and not evidence_available(item):
         abort(422, description="Evidence must pass validation and malware scanning before use or download.")
     return item
 

@@ -56,13 +56,9 @@ services:
         sync: false
       - key: SENDGRID_FROM_NAME
         value: OneCase
-      - key: CLAMAV_HOST
-        fromService:
-          type: pserv
-          name: onecase-scanner
-          property: host
-      - key: CLAMAV_PORT
-        value: "3310"
+      # Explicit opt-out requested for this deployment; files remain labelled unscanned.
+      - key: MALWARE_SCAN_ENABLED
+        value: "false"
   - type: worker
     name: onecase-worker
     runtime: python
@@ -101,14 +97,5 @@ services:
         fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_ENDPOINT}
       - key: NEON_STORAGE_REGION
         fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_REGION}
-      - key: CLAMAV_HOST
-        fromService: {type: pserv, name: onecase-scanner, property: host}
-      - key: CLAMAV_PORT
-        value: "3310"
-  - type: pserv
-    name: onecase-scanner
-    runtime: image
-    # ClamAV recommends 3-4 GiB for loading and refreshing its signatures.
-    plan: pro
-    image:
-      url: docker.io/clamav/clamav:stable
+      - key: MALWARE_SCAN_ENABLED
+        fromService: {type: web, name: onecase-api, envVarKey: MALWARE_SCAN_ENABLED}

@@ -1,6 +1,6 @@
 # OneCase frontend — Vercel
 
-React, TypeScript and Vite provide the officer workspace. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text. The square `public/onecase-logo.png` contains the circular case-coordination mark; proportional favicon and launcher sizes live under `public/icons/onecase-*.png`.
+React, TypeScript and Vite provide the officer workspace. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text. The square `public/onecase-emblem.png` contains the user-selected gear emblem without its wordmark; its original gold/navy/green/orange palette is retained. Proportional favicon and launcher sizes live under `public/icons/onecase-emblem-*.png`.
 
 ## Local setup
 
@@ -68,8 +68,8 @@ private windows and embedded browsers may not offer it. Installation requires
 no backend change. Case records and authentication still require a connection;
 this change adds no service worker or offline cache of private data.
 
-Verify `/manifest.webmanifest` returns JSON and both `/icons/onecase-192.png` and
-`/icons/onecase-512.png` load from the deployed hostname. In Chrome DevTools,
+Verify `/manifest.webmanifest` returns JSON and both `/icons/onecase-emblem-192.png` and
+`/icons/onecase-emblem-512.png` load from the deployed hostname. In Chrome DevTools,
 Application → Manifest shows any installability errors.
 
 ## Checks

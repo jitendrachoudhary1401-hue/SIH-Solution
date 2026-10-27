@@ -1,4 +1,4 @@
-"""Quarantine pipeline. A missing scanner never produces a clean document."""
+"""Evidence validation with an explicit, auditable malware-scan opt-out."""
 import json
 import os
 import socket
@@ -23,6 +23,8 @@ def validate_file(path, media_type):
 
 
 def scan_file(path):
+    if not current_app.config["MALWARE_SCAN_ENABLED"]:
+        return "unscanned", "File validation completed. Malware scan skipped by deployment configuration."
     host = current_app.config.get("CLAMAV_HOST")
     if not host:
         return "pending", "Malware scanner unavailable. Evidence remains quarantined."
@@ -49,9 +51,25 @@ def scan_file(path):
     return "pending", "Scanner did not confirm a clean result."
 
 
+def evidence_available(item):
+    return item.scan_state == "clean" or (
+        not current_app.config["MALWARE_SCAN_ENABLED"] and item.scan_state == "unscanned"
+    )
+
+
+def validate_bypassed_upload(content, media_type):
+    """Keep bounded parser checks even when no scanner/worker is deployed."""
+    with tempfile.TemporaryDirectory(prefix="onecase-validation-") as temp:
+        path = Path(temp) / "evidence"
+        path.write_bytes(content)
+        validate_file(path, media_type)
+        return scan_file(path)
+
+
 def scan_pending(limit=10):
     from .api import event
-    attachments = db.session.scalars(select(Attachment).where(Attachment.scan_state == "pending").order_by(Attachment.scan_checked_at.asc().nullsfirst(), Attachment.id).limit(limit)).all()
+    states = ("pending", "unscanned") if current_app.config["MALWARE_SCAN_ENABLED"] else ("pending",)
+    attachments = db.session.scalars(select(Attachment).where(Attachment.scan_state.in_(states)).order_by(Attachment.scan_checked_at.asc().nullsfirst(), Attachment.id).limit(limit)).all()
     for item in attachments:
         try:
             from .storage import read

@@ -54,6 +54,7 @@ def create_app(config=None):
         SENDGRID_FROM_NAME=os.getenv("SENDGRID_FROM_NAME", "OneCase"),
         CLAMAV_HOST=os.getenv("CLAMAV_HOST", ""),
         CLAMAV_PORT=int(os.getenv("CLAMAV_PORT", "3310")),
+        MALWARE_SCAN_ENABLED=os.getenv("MALWARE_SCAN_ENABLED", "true").lower() != "false",
         DOCUMENT_LIMIT_PER_CASE=int(os.getenv("DOCUMENT_LIMIT_PER_CASE", "30")),
         MAX_UPLOAD_BYTES=int(os.getenv("MAX_UPLOAD_BYTES", str(3 * 1024 * 1024))),
         JOB_LIMIT_PER_HOUR=int(os.getenv("JOB_LIMIT_PER_HOUR", "30")),

@@ -6,7 +6,7 @@ test('case-coordination logo stays square on desktop and phone', async ({ page }
     await page.goto('/officer/login');
     const logo = page.getByRole('img', { name: 'OneCase', exact: true });
     await expect(logo).toBeVisible();
-    await expect(logo).toHaveAttribute('src', '/onecase-logo.png');
+    await expect(logo).toHaveAttribute('src', '/onecase-emblem.png');
     const dimensions = await logo.evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }));
     expect(dimensions.width).toBeGreaterThan(0);
     expect(dimensions.width).toBe(dimensions.height);

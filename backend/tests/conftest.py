@@ -12,7 +12,7 @@ from app.cli import seed_demo
 def app(tmp_path):
     from cryptography.fernet import Fernet
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///" + (tmp_path / "test.db").as_posix(), "STORAGE_PATH": str(tmp_path / "documents"), "STORAGE_BACKEND": "local", "RATELIMIT_ENABLED": False, "MFA_ENCRYPTION_KEY": Fernet.generate_key().decode()})
-    app.config.update(SENDGRID_API_KEY="", SENDGRID_FROM_EMAIL="", DEMO_ACCOUNTS_ENABLED=False)
+    app.config.update(SENDGRID_API_KEY="", SENDGRID_FROM_EMAIL="", DEMO_ACCOUNTS_ENABLED=False, MALWARE_SCAN_ENABLED=True)
     with app.app_context():
         db.create_all()
         seed_demo("TestPassword!2026")

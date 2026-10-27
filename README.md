@@ -1,6 +1,6 @@
 # OneCase
 
-An officer workspace for accountable institution-complaint coordination. The application uses a warm, light-only interface, larger text and sharp controls. Its circular OneCase logo shows connected case records and a resolution checkmark in terracotta, cream and ochre.
+An officer workspace for accountable institution-complaint coordination. The application uses a warm, light-only interface, larger text and sharp controls. Its selected gear emblem connects the officer, student, institution, case record and education symbols, preserving the supplied gold/navy/green/orange palette without an embedded wordmark.
 
 | Component | Implementation / deployment |
 | --- | --- |

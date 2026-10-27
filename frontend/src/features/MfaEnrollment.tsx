@@ -14,7 +14,7 @@ export default function MfaEnrollment({ onComplete, onLogout }: { onComplete: ()
     event.preventDefault(); confirm.mutate(String(new FormData(event.currentTarget).get('code')));
   }
   return <main className="enrollment-page"><section className="card security-card">
-    <img className="brand-logo" src="/onecase-logo.png" alt="OneCase" />
+    <img className="brand-logo" src="/onecase-emblem.png" alt="OneCase" />
     <p className="eyebrow">PROTECT YOUR WORKSPACE</p><h1>Set up your authenticator</h1>
     <p>Your password is verified. Complete authenticator setup before accessing case records or administration. This setup session lasts ten minutes.</p>
     {!setup && !codes.length && <button className="button primary" disabled={enroll.isPending} onClick={() => enroll.mutate()}>Set up authenticator</button>}

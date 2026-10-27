@@ -19,6 +19,7 @@ from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
                      Pair, Review, Idempotency, MatchingRun, SLAPause)
 from .network import client_address
+from .documents import evidence_available
 
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
@@ -226,7 +227,7 @@ def event_json(item):
             "kind": item.kind, "summary": item.summary if content else "Case activity recorded", "reason": item.reason if content else "Content restricted to authorized case readers.",
             "changes": item.changes if content else {}, "outcome": item.outcome, "severity": item.severity,
             "created_at": iso(item.created_at), "actor_id": item.actor_id if content else None,
-            "proof": [{"id": a.id, "filename": a.filename, "scan_state": a.scan_state} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == item.complaint_id, Attachment.id.in_(item.changes.get('evidence_ids', []) + ([item.changes['attachment_id']] if item.changes.get('attachment_id') else [])))) if item.complaint and document_allowed(item.complaint, a)]}
+            "proof": [{"id": a.id, "filename": a.filename, "scan_state": a.scan_state, "available": evidence_available(a)} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == item.complaint_id, Attachment.id.in_(item.changes.get('evidence_ids', []) + ([item.changes['attachment_id']] if item.changes.get('attachment_id') else [])))) if item.complaint and document_allowed(item.complaint, a)]}
 
 
 def enqueue(case):
@@ -530,7 +531,8 @@ def register_case():
 def detail(case_id):
     case = case_or_404(case_id)
     result = case_json(case, True)
-    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id, "scan_state": a.scan_state, "scan_detail": a.scan_detail, "media_type": a.media_type, "uploaded_by": a.uploaded_by, "created_at": iso(a.created_at)} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
+    result["malware_scan_enabled"] = current_app.config["MALWARE_SCAN_ENABLED"]
+    result["attachments"] = [{"id": a.id, "filename": a.filename, "size": a.size, "checksum": a.checksum, "proceeding_id": a.proceeding_id, "scan_state": a.scan_state, "scan_detail": a.scan_detail, "available": evidence_available(a), "media_type": a.media_type, "uploaded_by": a.uploaded_by, "created_at": iso(a.created_at)} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == case.id)) if document_allowed(case, a)]
     result["transfers"] = [{"id": t.id, "to_owner_id": t.to_owner_id, "created_at": iso(t.created_at), "acknowledged_at": iso(t.acknowledged_at)} for t in db.session.scalars(select(Transfer).where(Transfer.complaint_id == case.id).order_by(Transfer.id.desc()))]
     result["pauses"] = [{"id": p.id, "started_at": iso(p.started_at), "ended_at": iso(p.ended_at), "reason": p.reason} for p in db.session.scalars(select(SLAPause).where(SLAPause.complaint_id == case.id).order_by(SLAPause.id))]
     return result
@@ -644,7 +646,7 @@ def add_action(case_id):
     check_version(case, data.version)
     for evidence_id in data.evidence_ids:
         proof = db.session.get(Attachment, evidence_id)
-        if not proof or proof.complaint_id != case.id or not document_allowed(case, proof) or proof.scan_state != 'clean':
+        if not proof or proof.complaint_id != case.id or not document_allowed(case, proof) or not evidence_available(proof):
             abort(422, description='Action proof must be an approved attachment belonging to this complaint.')
     event(case, "action_recorded", "Officer action recorded", data.reason, {'evidence_ids': data.evidence_ids, 'next_action': data.next_action})
     if data.next_action:
@@ -764,6 +766,17 @@ def upload(case_id):
     ext = Path(name).suffix.lower()
     if not media or ext not in {"application/pdf": [".pdf"], "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"], 'video/mp4': ['.mp4'], 'video/webm': ['.webm']}[media]:
         abort(422, description="File signature and extension must match PDF, PNG, JPEG, MP4 or WebM.")
+    scan_state, scan_detail, scan_checked_at = "pending", None, None
+    if not current_app.config["MALWARE_SCAN_ENABLED"]:
+        from .documents import validate_bypassed_upload
+        import subprocess
+        try:
+            scan_state, scan_detail = validate_bypassed_upload(content, media)
+            scan_checked_at = now()
+        except ValueError:
+            abort(422, description="Document parser rejected the file.")
+        except (OSError, subprocess.TimeoutExpired):
+            abort(503, description="Document validation is temporarily unavailable. Retry the upload.")
     key = uuid4().hex
     from . import storage
     storage_backend, storage_bucket = storage.put(key, content, media)
@@ -771,10 +784,10 @@ def upload(case_id):
         sensitivity = request.form.get("sensitivity", "standard")
         if sensitivity not in ("standard", "restricted"):
             abort(422, description="Invalid evidence sensitivity.")
-        attachment = Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity, storage_backend=storage_backend, storage_bucket=storage_bucket, uploaded_by=g.user.id, upload_key=upload_key)
+        attachment = Attachment(complaint_id=case.id, filename=name, key=key, media_type=media, size=len(content), checksum=hashlib.sha256(content).hexdigest(), proceeding_id=proceeding_id, sensitivity=sensitivity, storage_backend=storage_backend, storage_bucket=storage_bucket, uploaded_by=g.user.id, upload_key=upload_key, scan_state=scan_state, scan_detail=scan_detail, scan_checked_at=scan_checked_at)
         db.session.add(attachment)
         db.session.flush()
-        event(case, "evidence_added", f"Evidence added: {name}", changes={'attachment_id': attachment.id, 'checksum': attachment.checksum, 'scan_state': 'pending'})
+        event(case, "evidence_added", f"Evidence added: {name}", changes={'attachment_id': attachment.id, 'checksum': attachment.checksum, 'scan_state': scan_state, 'malware_scan_enabled': current_app.config["MALWARE_SCAN_ENABLED"]})
         case.version += 1
         db.session.commit()
     except Exception:
@@ -792,7 +805,7 @@ def download(attachment_id):
     case = case_or_404(attachment.complaint_id)
     if not document_allowed(case, attachment):
         abort(404, description="Document unavailable in your field scope.")
-    if attachment.scan_state != "clean":
+    if not evidence_available(attachment):
         abort(423, description="Evidence is quarantined pending validation and malware checks.")
     from .storage import read
     try:
@@ -989,4 +1002,5 @@ def operations():
             "workers": [{"id": item.id, "last_seen_at": iso(item.seen_at), "last_success_at": iso(item.succeeded_at),
                          "recent": item.seen_at.replace(tzinfo=timezone.utc) > now() - timedelta(minutes=2),
                          "failed_stages": item.failed_stages} for item in heartbeats],
-            "evidence_scanner_configured": bool(current_app.config["CLAMAV_HOST"])}
+            "evidence_scanner_configured": bool(current_app.config["CLAMAV_HOST"]),
+            "malware_scan_enabled": current_app.config["MALWARE_SCAN_ENABLED"]}

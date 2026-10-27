@@ -21,7 +21,7 @@ export default function Registration({ audience }: { audience: 'family' | 'other
   }
   return <div className="registration-page">
     <aside className="registration-story">
-      <Link to="/officer/login" className="brand"><img className="brand-logo" src="/onecase-logo.png" alt="OneCase" /><span>OneCase<small>Institution complaint coordination</small></span></Link>
+      <Link to="/officer/login" className="brand"><img className="brand-logo" src="/onecase-emblem.png" alt="OneCase" /><span>OneCase<small>Institution complaint coordination</small></span></Link>
       <div><p className="eyebrow">YOUR NEXT STEP STARTS HERE</p><h2>A voice.<br />A clear record.<br />A way forward.</h2><p>Create your account to keep track of the records shared with you, in one place.</p>
       <ol><li><span>01</span><div><strong>Choose your account</strong><p>Register as a student, parent or another member of the community.</p></div></li><li><span>02</span><div><strong>Make it yours</strong><p>Use your own email and a private passphrase.</p></div></li><li><span>03</span><div><strong>Start fresh</strong><p>Your workspace starts empty. Activity appears as real records are added or shared.</p></div></li></ol></div>
       <p className="registration-trust"><ShieldCheck size={18} /> Private access. Clear accountability.</p>
