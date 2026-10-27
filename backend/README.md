@@ -9,14 +9,16 @@ and start `python serve.py`. Existing services not managed by this Blueprint
 need the same branch and Auto-Deploy settings entered once in Render.
 See [GitHub deployment instructions](../.github/README.md).
 
-The Blueprint also defines `onecase-worker` (Python background worker) and
-`onecase-scanner` (private ClamAV TCP service) on Render. The worker installs
+The Blueprint also defines `onecase-worker` (Python background worker) on
+Render. The worker installs
 `requirements-models.txt`, downloads the committed model revisions, and receives
 server-side configuration from the API service. It runs matching, deadline and
 milestone reminders, evidence validation/scanning, and a database heartbeat.
-Administration shows queue counts and recent worker liveness. Scanner configuration
-alone does not establish that its signatures are ready; evidence stays quarantined
-until the scanner returns a complete, valid clean response.
+Administration shows queue counts and recent worker liveness. The current
+Blueprint explicitly sets `MALWARE_SCAN_ENABLED=false` and does not provision a
+ClamAV service. Parser-validated evidence is labelled unscanned and is available
+within its normal access scope. When scanning is enabled, evidence stays
+quarantined until a configured scanner returns a complete, valid clean response.
 
 Production requires PostgreSQL, private Neon storage credentials, shared Redis,
 secure cookies, a valid Fernet key, and random `SECRET_KEY` and
@@ -80,6 +82,7 @@ Neon is the file-storage provider; no AWS account or AWS resources are added. Fo
 | `COOKIE_SECURE` | `false` only for local HTTP, `true` for deployed HTTPS |
 | `SESSION_IDLE_MINUTES`, `STEP_UP_MINUTES` | Idle session expiry and recent-authentication window |
 | `CLAMAV_HOST`, `CLAMAV_PORT` | Approved private malware-scanner service |
+| `MALWARE_SCAN_ENABLED` | Application default `true`; the current Render template explicitly uses `false` to bypass malware checks while retaining parser validation and access checks |
 | `MODEL_PATH` | Pinned local model bundle directory |
 | `API_HOST`, `API_PORT` | Local listener; Render's `PORT` takes precedence |
 | `MAX_UPLOAD_BYTES` | Deployed per-file size limit; default 3 MiB |
@@ -277,4 +280,4 @@ The live command is opt-in and should run on an isolated Neon branch, not agains
 
 Committed Alembic migrations preserve the original complaints and add proceeding/permission/security/storage records plus normalized people, locations, campuses, contacts, identity claims/checks, participants, sources, issues and issue relationships. Legacy complaints receive a marked default issue and preserved source record. Names are not used to backfill people. Creating the schema does not itself verify a person or complete every issue-level matching/UI refinement.
 
-Database backups, private-object backups, recovery testing, storage encryption, HTTPS/proxy trust, MFA recovery ownership, grant reviews, policy sources and incident response must be validated for the actual deployment. See [the security requirements](../09_Security.md) and the [root setup guide](../SETUP_GUIDE.md).
+Database backups, private-object backups, recovery testing, storage encryption, HTTPS/proxy trust, MFA recovery ownership, grant reviews, policy sources and incident response must be validated for the actual deployment. See [the security and deployment audit](../docs/CODE_AUDIT_AND_REPAIRS.md) and the [root setup guide](../SETUP_GUIDE.md).

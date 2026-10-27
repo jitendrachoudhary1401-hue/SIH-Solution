@@ -1,6 +1,8 @@
 # OneCase frontend — Vercel
 
-React, TypeScript and Vite provide the officer workspace. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text. The square `public/onecase-emblem.png` contains the user-selected gear emblem without its wordmark; its original gold/navy/green/orange palette is retained. Proportional favicon and launcher sizes live under `public/icons/onecase-emblem-*.png`.
+React, TypeScript and Vite provide the public and officer workspaces for **Team MODEST's OneCase**. The interface is **light-only**, uses a warm ivory/terracotta palette and larger text. The square `public/onecase-emblem.png` contains the user-selected gear emblem without its wordmark; its original gold/navy/green/orange palette is retained. Proportional favicon and launcher sizes live under `public/icons/onecase-emblem-*.png`.
+
+[Live website](https://sih-solution-kappa.vercel.app/) · [Feature overview and screenshots](../README.md#screenshots)
 
 ## Local setup
 
