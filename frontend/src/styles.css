@@ -512,6 +512,16 @@ tbody tr:hover { background: #fcf7ef; }
 .demo-role small { display: block; margin-top: 5px; line-height: 1.6; }
 .demo-role>svg { flex-shrink: 0; color: var(--primary); }
 .demo-admin-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin-top: 22px; }
+.demo-chevron { margin-left: auto; transition: transform .15s; }
+.demo-chevron.expanded { transform: rotate(180deg); }
+.demo-inline-panel { padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--border); }
+.demo-inline-panel h2 { font-size: 20px; }
+.demo-inline-panel>.muted { font-size: 13px; margin: 10px 0 18px; line-height: 1.7; }
+.demo-inline-panel .demo-role-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.demo-inline-panel .demo-role { min-height: 50px; padding: 10px; gap: 7px; }
+.demo-inline-panel .demo-role strong { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.demo-inline-panel .demo-admin-note { font-size: 12px; }
+.demo-signing-in { font-size: 13px; color: var(--primary); margin-top: 15px; }
 /* Keep content and controls within the viewport at phone/tablet widths. */
 .app-shell,.main-shell,.page-heading>div,.card,.dialog,.login-card,.registration-main { min-width: 0; }
 .page-heading h1,.profile strong,.profile small,.recovery-card h1 { overflow-wrap: anywhere; }
