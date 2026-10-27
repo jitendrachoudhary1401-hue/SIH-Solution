@@ -1,4 +1,4 @@
-export type User = { id: number; name: string; email: string; role: string; is_demo: boolean; requested_role: string | null; organization: string; approval_pending: boolean; bureau_id: number | null; bureau: string; roles: string[]; capabilities: Record<string, boolean> };
+export type User = { id: number; name: string; email: string; role: string; is_demo: boolean; mfa_enrollment_required?: boolean; requested_role: string | null; organization: string; approval_pending: boolean; bureau_id: number | null; bureau: string; roles: string[]; capabilities: Record<string, boolean> };
 export type Institution = { id: number; name: string; external_id: string | null; verified: boolean; region: string; address: string };
 export type Case = {
   id: number; reference: string; institution: Institution; category: string; description?: string;

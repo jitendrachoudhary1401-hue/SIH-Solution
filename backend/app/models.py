@@ -225,6 +225,13 @@ class Job(db.Model):
     error = db.Column(db.String(300))
 
 
+class WorkerHeartbeat(db.Model):
+    id = db.Column(db.String(64), primary_key=True)
+    seen_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    succeeded_at = db.Column(db.DateTime(timezone=True))
+    failed_stages = db.Column(db.JSON, nullable=False, default=list)
+
+
 class MatchingRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)

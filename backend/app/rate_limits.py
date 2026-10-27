@@ -7,6 +7,7 @@ import hashlib
 import os
 from flask import request
 from flask_limiter import Limiter
+from .network import client_address
 
 
 def configure(app):
@@ -15,7 +16,7 @@ def configure(app):
     app.config.setdefault("RATELIMIT_ENABLED", True)
     if app.config["APP_ENV"] == "production" and not str(app.config["RATELIMIT_STORAGE_URI"]).startswith(("redis://", "rediss://")):
         raise RuntimeError("Production rate limiting requires a shared Redis storage URI")
-    identity = lambda: hashlib.sha256((request.remote_addr or "unknown").encode()).hexdigest()
+    identity = lambda: hashlib.sha256(client_address().encode()).hexdigest()
     limiter = Limiter(key_func=identity, default_limits=[os.getenv("RATE_LIMIT_DEFAULT", "120 per minute"), "2000 per hour"],
                       headers_enabled=True, storage_uri=app.config["RATELIMIT_STORAGE_URI"],
                       swallow_errors=False, in_memory_fallback_enabled=False)

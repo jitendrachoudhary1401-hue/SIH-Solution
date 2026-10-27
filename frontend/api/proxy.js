@@ -1,10 +1,13 @@
 // Vercel server-only API proxy. Credentials never enter the browser bundle.
 // Same-origin cookies avoid cross-site cookie failures between Vercel and Render.
+import { isIP } from 'node:net';
 const MAX_BODY = 4 * 1024 * 1024;
 
 export default async function handler(req, res) {
   const configured = process.env.BACKEND_URL;
+  res.setHeader('cache-control','private, no-store');
   if (!configured) return res.status(503).json({error:{message:'Backend connection is not configured.'}});
+  if (process.env.VERCEL && (process.env.FRONTEND_PROXY_SECRET || '').length < 32) return res.status(503).json({error:{message:'The application proxy is not configured securely.'}});
   let base;
   try {
     base = new URL(configured);
@@ -26,7 +29,12 @@ export default async function handler(req, res) {
   const headers = {};
   for (const name of ['content-type','accept','cookie','x-csrf-token','idempotency-key']) if (req.headers[name]) headers[name]=req.headers[name];
   if (mutating) headers.origin = base.origin;
-  if (process.env.FRONTEND_PROXY_SECRET) headers['x-onecase-proxy-key']=process.env.FRONTEND_PROXY_SECRET;
+  if (process.env.FRONTEND_PROXY_SECRET) {
+    headers['x-onecase-proxy-key']=process.env.FRONTEND_PROXY_SECRET;
+    // Vercel supplies this header. Never relay an incoming onecase-client-ip.
+    const client = process.env.VERCEL ? String(req.headers['x-vercel-forwarded-for'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim() : req.socket?.remoteAddress;
+    if (client && isIP(client)) headers['x-onecase-client-ip']=client;
+  }
   let body;
   try {
     if (!['GET','HEAD'].includes(req.method)) {

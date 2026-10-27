@@ -26,6 +26,7 @@ test('server-only proxy forwards a session request and response cookie', async()
     assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true});
     assert.equal(received.url,'/api/auth/login');assert.equal(received.headers.origin,process.env.BACKEND_URL);
     assert.equal(received.headers['x-onecase-proxy-key'],'synthetic-proxy-fixture');assert.equal(received.headers['x-csrf-token'],'synthetic-csrf');
+    assert.equal(received.headers['x-onecase-client-ip'],'127.0.0.1');
     assert.match(response.headers.get('set-cookie'),/HttpOnly/);assert.match(response.headers.get('cache-control'),/no-store/);
   } finally {await close(proxy);await close(backend);for(const[key,value]of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });
@@ -41,4 +42,14 @@ test('proxy fails closed when backend environment configuration is absent',async
   const saved=process.env.BACKEND_URL;delete process.env.BACKEND_URL;const proxy=proxyServer();
   try {const origin=await listen(proxy);const response=await fetch(origin+'/api/proxy?path=health');assert.equal(response.status,503);}
   finally {await close(proxy);if(saved!==undefined)process.env.BACKEND_URL=saved;}
+});
+
+test('Vercel deployment fails closed when the shared proxy secret is absent',async()=>{
+  const saved={BACKEND_URL:process.env.BACKEND_URL,VERCEL:process.env.VERCEL,FRONTEND_PROXY_SECRET:process.env.FRONTEND_PROXY_SECRET};
+  const proxy=proxyServer();
+  try {
+    process.env.BACKEND_URL='https://backend.example.test';process.env.VERCEL='1';delete process.env.FRONTEND_PROXY_SECRET;
+    const origin=await listen(proxy);
+    assert.equal((await fetch(origin+'/api/proxy?path=health')).status,503);
+  } finally {await close(proxy);for(const[key,value]of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });

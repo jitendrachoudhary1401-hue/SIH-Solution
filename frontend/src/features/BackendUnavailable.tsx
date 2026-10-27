@@ -2,7 +2,7 @@ import { RefreshCw, ServerOff } from 'lucide-react';
 
 export default function BackendUnavailable({checking, onRetry}: {checking: boolean; onRetry: () => void}) {
   return <main className="not-found"><section className="card not-found-card" aria-labelledby="backend-down-title">
-    <img className="brand-logo" src="/logo.png" alt="AICTE" />
+    <img className="brand-logo" src="/onecase-logo.png" alt="OneCase" />
     <p className="eyebrow">ONECASE · SERVICE UNAVAILABLE</p>
     <ServerOff size={48} aria-hidden="true" />
     <h1 id="backend-down-title">Backend is down. Try again later.</h1>

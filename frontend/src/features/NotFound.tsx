@@ -3,7 +3,7 @@ import { ArrowLeft, Search } from 'lucide-react';
 
 export default function NotFound({destination}: {destination: string}) {
   return <section className="not-found" aria-label="Page not found"><div className="card not-found-card">
-    <img className="brand-logo" src="/logo.png" alt="AICTE" />
+    <img className="brand-logo" src="/onecase-logo.png" alt="OneCase" />
     <p className="eyebrow">ONECASE · PAGE NOT FOUND</p>
     <div className="not-found-number" aria-hidden="true">404</div>
     <Search size={30} aria-hidden="true" />

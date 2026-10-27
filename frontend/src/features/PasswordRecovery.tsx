@@ -29,7 +29,7 @@ export default function PasswordRecovery() {
     if (reset && values.password !== values.confirm_password) { setValidation('Passwords do not match.'); return; }
     setValidation(''); mutation.mutate(values);
   }
-  return <main className="recovery-page"><Link className="brand recovery-brand" to="/officer/login"><img className="brand-logo" src="/logo.png" alt="AICTE" /><span>OneCase<small>Institution complaint coordination</small></span></Link><section className="card recovery-card">
+  return <main className="recovery-page"><Link className="brand recovery-brand" to="/officer/login"><img className="brand-logo" src="/onecase-logo.png" alt="OneCase" /><span>OneCase<small>Institution complaint coordination</small></span></Link><section className="card recovery-card">
     <span className="recovery-icon">{reset ? <KeyRound size={25} /> : <Mail size={25} />}</span>
     <p className="eyebrow">ACCOUNT RECOVERY</p>
     <h1>{mutation.isSuccess ? reset ? 'Password updated' : 'Check your email' : reset ? 'Set a new password' : 'Forgot your password?'}</h1>

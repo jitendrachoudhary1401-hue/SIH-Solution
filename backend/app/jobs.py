@@ -1,6 +1,6 @@
 from datetime import timedelta, timezone
 from sqlalchemy import or_, select
-from .models import db, Complaint, Job, Transfer, Notification, now
+from .models import db, Complaint, Job, Transfer, Notification, Milestone, Proceeding, now
 
 
 def monitor():
@@ -29,6 +29,27 @@ def monitor():
         if len(cohort) >= 5 and len(overdue) / len(cohort) >= .5:
             for lead in db.session.scalars(select(User).where(User.bureau_id == bureau_id, User.role == "lead", User.active.is_(True))):
                 notify(lead.id, overdue[0], "bottleneck", f"Bureau backlog: {len(overdue)} / {len(cohort)} active cases overdue; illustrative rule v1 (50%, minimum 5).", f"bottleneck:backlog:v1:{bureau_id}:{now().date()}:{lead.id}")
+    # Each proceeding has its own clock; its reminders must not depend on the
+    # complaint-level due date. Recheck the recipient's live object scope.
+    from .auth import scope, proceeding_allowed
+    from .workflow import milestone_condition
+    milestones = db.session.scalars(select(Milestone).where(Milestone.completed_at.is_(None), Milestone.due_at.is_not(None))).all()
+    for milestone in milestones:
+        proceeding = db.session.get(Proceeding, milestone.proceeding_id)
+        case = db.session.get(Complaint, proceeding.complaint_id)
+        recipient = db.session.get(User, milestone.recipient_id)
+        if case.status == "disposed" or not recipient or not recipient.active:
+            continue
+        if not db.session.scalar(select(Complaint.id).where(Complaint.id == case.id, scope(recipient))) or not proceeding_allowed(proceeding, "read", recipient):
+            continue
+        condition = milestone_condition(milestone)
+        if condition not in ("overdue", "due_soon"):
+            continue
+        key = f"milestone:{milestone.id}:{milestone.revision}:{condition}:{recipient.id}"
+        exists = db.session.scalar(select(Notification.id).where(Notification.dedup_key == key))
+        notify(recipient.id, case, condition, f"{case.reference}: {milestone.title} {condition.replace('_', ' ')}.", key)
+        if not exists:
+            event(case, "milestone_alert", "Proceeding milestone reminder recorded", changes={"milestone_id": milestone.id, "condition": condition}, actor=False)
     db.session.commit()
 
 

@@ -10,14 +10,15 @@ from uuid import uuid4
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
 from flask import Blueprint, abort, current_app, g, jsonify, make_response, request, send_file
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import and_, func, or_, select
 from werkzeug.utils import secure_filename
 from .auth import (authenticated, case_or_404, check_version, digest, scope, roles, capabilities,
-                   allowed, has_content, document_allowed, proceeding_allowed, require_admin)
+                   allowed, has_content, document_allowed, proceeding_allowed, require_admin, requires_mfa_enrollment)
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
                      Pair, Review, Idempotency, MatchingRun, SLAPause)
+from .network import client_address
 
 api = Blueprint("api", __name__)
 hasher = PasswordHasher()
@@ -29,6 +30,18 @@ TRANSITIONS = {"received": ["under_review", "disposed"], "under_review": ["await
 
 class Input(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def utc_timestamps(self):
+        # SQLite does not preserve timezone offsets; normalize before persisting
+        # so development and PostgreSQL use the same instants and report edges.
+        for name in type(self).model_fields:
+            value = getattr(self, name)
+            if isinstance(value, datetime):
+                if value.tzinfo is None or value.utcoffset() is None:
+                    raise ValueError(f"{name}: a timezone is required")
+                setattr(self, name, value.astimezone(timezone.utc))
+        return self
 
 
 class LoginInput(Input):
@@ -123,7 +136,7 @@ def body():
 
 def user_json(user):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
-            "is_demo": user.is_demo,
+            "is_demo": user.is_demo, "mfa_enrollment_required": requires_mfa_enrollment(user),
             "requested_role": user.requested_role, "organization": user.organization or "",
             "approval_pending": user.role == "pending",
             "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Assigned scope",
@@ -157,6 +170,8 @@ def case_json(case, detail=False):
               "matching_state": case.matching_state, "matching_error": case.matching_error}
     result.update(issue_summary=case.issue_summary, complainant_type=case.complainant_type,
                   source_channel=case.source_channel, source_reference=case.source_reference, entered_at=iso(case.entered_at))
+    if not has_content(case):
+        result.update(issue_summary="", source_reference="", next_action="Details restricted to authorized case readers.")
     if detail:
         content = has_content(case)
         result["description"] = case.description if content else "Full complaint content is outside your appointment's field scope. Use the assigned proceeding records below."
@@ -203,11 +218,14 @@ def event(case, kind, summary, reason="", changes=None, actor=None):
 
 
 def event_json(item):
+    content = not item.complaint or has_content(item.complaint)
+    # History can contain old descriptions and unrestricted remarks. A basic
+    # appointment must not recover content that the case detail redacts.
     return {"id": item.id, "complaint_id": item.complaint_id,
-            "reference": item.complaint.reference if item.complaint else None, "actor": item.actor_name,
-            "kind": item.kind, "summary": item.summary, "reason": item.reason,
-            "changes": item.changes, "outcome": item.outcome, "severity": item.severity,
-            "created_at": iso(item.created_at), "actor_id": item.actor_id,
+            "reference": item.complaint.reference if item.complaint else None, "actor": item.actor_name if content else "Restricted actor",
+            "kind": item.kind, "summary": item.summary if content else "Case activity recorded", "reason": item.reason if content else "Content restricted to authorized case readers.",
+            "changes": item.changes if content else {}, "outcome": item.outcome, "severity": item.severity,
+            "created_at": iso(item.created_at), "actor_id": item.actor_id if content else None,
             "proof": [{"id": a.id, "filename": a.filename, "scan_state": a.scan_state} for a in db.session.scalars(select(Attachment).where(Attachment.complaint_id == item.complaint_id, Attachment.id.in_(item.changes.get('evidence_ids', []) + ([item.changes['attachment_id']] if item.changes.get('attachment_id') else [])))) if item.complaint and document_allowed(item.complaint, a)]}
 
 
@@ -237,10 +255,15 @@ def filtered_cases(receipt_dates=True, aggregate=False):
     for key, sign in ([("from", "start"), ("to", "end")] if receipt_dates else []):
         if filters.get(key):
             try:
-                value = datetime.fromisoformat(filters[key]).replace(tzinfo=timezone.utc)
+                from zoneinfo import ZoneInfo
+                value = datetime.fromisoformat(filters[key])
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=ZoneInfo("Asia/Kolkata"))
             except ValueError:
                 abort(422, description="Invalid report date.")
-            query = query.where(Complaint.received_at >= value) if sign == "start" else query.where(Complaint.received_at < value + timedelta(days=1))
+            boundary = value if sign == "start" else value + timedelta(days=1)
+            boundary = boundary.astimezone(timezone.utc)
+            query = query.where(Complaint.received_at >= boundary) if sign == "start" else query.where(Complaint.received_at < boundary)
     if filters.get("active") == "true":
         query = query.where(Complaint.status != "disposed")
     if filters.get("overdue") == "true":
@@ -309,12 +332,12 @@ def account_summary():
 def login():
     data = parse(LoginInput)
     email, password = data.email.lower(), data.password
-    key = digest(f"{request.remote_addr}:{email}")
+    key = digest(f"{client_address()}:{email}")
     count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == key, LoginAttempt.at > now() - timedelta(minutes=15)))
     if count >= 10:
         abort(429, description="Too many attempts. Try again in 15 minutes.")
     db.session.add(LoginAttempt(key=key))
-    ip_key = digest("ip:" + str(request.remote_addr))
+    ip_key = digest("ip:" + client_address())
     ip_count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == ip_key, LoginAttempt.at > now() - timedelta(minutes=15)))
     account_key = digest("account:" + email)
     account_count = db.session.scalar(select(func.count()).select_from(LoginAttempt).where(LoginAttempt.key == account_key, LoginAttempt.at > now() - timedelta(minutes=15)))
@@ -335,21 +358,22 @@ def login():
     from .security import verify_mfa
     if user.mfa_enabled and not verify_mfa(user, data.verification_code):
         return {"error": {"message": "Enter a valid authenticator or one-time recovery code.", "status": 403, "mfa_required": True}}, 403
-    if current_app.config["APP_ENV"] == "production" and roles(user) & {"lead", "reviewer", "committee", "verifier", "admin"} and not user.mfa_enabled:
-        abort(403, description="Privileged production access requires MFA enrollment through the approved administrator process.")
+    # Password verification can establish only a short enrollment session.
+    # The authorization decorator blocks all workspace routes until MFA succeeds.
     return sign_in_response(user)
 
 
-def sign_in_response(user):
+def sign_in_response(user, extra=None):
     old = request.cookies.get("onecase_session")
     if old and (old_session := db.session.get(Session, digest(old))):
         db.session.delete(old_session)
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
-    db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(hours=8)))
+    lifetime = 600 if requires_mfa_enrollment(user) else 28800
+    db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(seconds=lifetime)))
     event(None, "authenticated", "Officer sign-in completed", actor=user)
     db.session.commit()
-    response = make_response({"user": user_json(user), "csrf": csrf})
-    response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
+    response = make_response({"user": user_json(user), "csrf": csrf, **(extra or {})})
+    response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=lifetime)
     return response
 
 
@@ -544,6 +568,9 @@ def edit_case(case_id):
         abort(422, description="No fields to update.")
     if "description" in changes:
         case.content_revision += 1
+        for pair in db.session.scalars(select(Pair).where(or_(Pair.case_a_id == case.id, Pair.case_b_id == case.id))):
+            pair.state = "pending"
+            pair.version += 1
         enqueue(case)
     event(case, "updated", "Case details updated", data.reason, changes)
     case.version += 1
@@ -683,8 +710,9 @@ def retry_matching(case_id):
     case = case_or_404(case_id, write=True)
     check_version(case, body().get("version"))
     job = db.session.scalar(select(Job).where(Job.dedup_key == f"matching:{case.id}:{case.content_revision}"))
-    if job and job.state == "failed":
+    if job and job.state in ("failed", "completed", "superseded"):
         job.state, job.attempts, job.available_at = "queued", 0, now()
+        job.error, job.lease_until = None, None
     elif job and job.state in ("queued", "running"):
         return {"ok": True, "state": case.matching_state}
     else:
@@ -776,8 +804,8 @@ def download(attachment_id):
     return send_file(io.BytesIO(content), as_attachment=True, download_name=attachment.filename, mimetype=attachment.media_type)
 
 
-def authorized_pairs():
-    ids = [c.id for c in db.session.scalars(select(Complaint).where(scope())) if has_content(c)]
+def authorized_pairs(aggregate=False):
+    ids = [c.id for c in db.session.scalars(select(Complaint).where(scope(aggregate=aggregate))) if aggregate or has_content(c)]
     return select(Pair).where(Pair.case_a_id.in_(ids), Pair.case_b_id.in_(ids))
 
 
@@ -877,11 +905,12 @@ def attention_key(case):
 @api.get("/dashboard/summary")
 @authenticated
 def dashboard():
-    cases = db.session.scalars(filtered_cases()).all()
+    cases = db.session.scalars(filtered_cases(aggregate=True)).all()
     active = [c for c in cases if c.status != "disposed"]
     ids = [c.id for c in cases]
-    pairs = db.session.scalars(authorized_pairs().where(or_(Pair.case_a_id.in_(ids), Pair.case_b_id.in_(ids)))).all()
-    visible_ids = filtered_cases(receipt_dates=False).with_only_columns(Complaint.id)
+    readable_ids = set(db.session.scalars(filtered_cases().with_only_columns(Complaint.id)))
+    pairs = db.session.scalars(authorized_pairs(aggregate=True).where(or_(Pair.case_a_id.in_(ids), Pair.case_b_id.in_(ids)))).all()
+    visible_ids = filtered_cases(receipt_dates=False, aggregate=True).with_only_columns(Complaint.id)
     # Throughput uses event-period boundaries independently of the receipt-cohort cards.
     from zoneinfo import ZoneInfo
     local = now().astimezone(ZoneInfo("Asia/Kolkata"))
@@ -889,14 +918,14 @@ def dashboard():
     trend = []
     for offset in range(7, -1, -1):
         start, end = week - timedelta(weeks=offset), week - timedelta(weeks=offset - 1)
-        received = db.session.scalar(select(func.count()).select_from(filtered_cases().where(Complaint.received_at >= start, Complaint.received_at < end).subquery()))
+        received = db.session.scalar(select(func.count()).select_from(filtered_cases(aggregate=True).where(Complaint.received_at >= start, Complaint.received_at < end).subquery()))
         disposed = db.session.scalar(select(func.count()).select_from(ActionEvent).where(ActionEvent.complaint_id.in_(visible_ids), ActionEvent.kind == "status_changed", ActionEvent.changes["status"]["after"].as_string() == "disposed", ActionEvent.created_at >= start, ActionEvent.created_at < end))
         trend.append({"week": start.strftime("%d %b"), "received": received, "disposed": disposed})
-    recent = db.session.scalars(select(ActionEvent).where(ActionEvent.complaint_id.in_(ids)).order_by(ActionEvent.id.desc()).limit(6)).all()
+    recent = db.session.scalars(select(ActionEvent).where(ActionEvent.complaint_id.in_(readable_ids)).order_by(ActionEvent.id.desc()).limit(6)).all()
     return {"total": len(cases), "active": len(active), "overdue": sum(condition(c) == "overdue" for c in active),
             "pending_pairs": sum(p.state == "pending" and p.band != "low" for p in pairs),
             "confirmed_pairs": sum(p.state == "related" for p in pairs),
-            "attention": [case_json(c) for c in sorted(active, key=attention_key)[:6]],
+            "attention": [case_json(c) for c in sorted(active, key=attention_key) if c.id in readable_ids][:6],
             "recent": [event_json(e) for e in recent], "trend": trend, "asOf": iso(now()),
             "ageing": [{"label": label, "count": sum(low <= (now() - c.received_at.replace(tzinfo=timezone.utc)).days < high for c in active)} for label, low, high in [("0–7 days", 0, 8), ("8–30 days", 8, 31), ("31–60 days", 31, 61), ("61+ days", 61, 100000)]],
             "matching": {"queued": sum(c.matching_state == "queued" for c in cases), "failed": sum(c.matching_state == "failed" for c in cases)},
@@ -928,7 +957,7 @@ def export():
 @api.get("/reports/metrics")
 @authenticated
 def report_metrics():
-    cohort = filtered_cases().with_only_columns(Complaint.id)
+    cohort = filtered_cases(aggregate=True).with_only_columns(Complaint.id)
     events = db.session.scalars(select(ActionEvent).where(ActionEvent.complaint_id.in_(cohort)).order_by(ActionEvent.created_at, ActionEvent.id)).all()
     starts, episodes = {}, []
     for item in events:
@@ -952,6 +981,12 @@ def report_metrics():
 @authenticated
 def operations():
     require_admin()
+    from .models import WorkerHeartbeat
     counts = {state: db.session.scalar(select(func.count()).select_from(Job).where(Job.state == state)) for state in ("queued", "running", "failed", "completed", "superseded")}
     oldest = db.session.scalar(select(func.min(Job.available_at)).where(Job.state == "queued"))
-    return {"jobs": counts, "oldest_queued_at": iso(oldest), "asOf": iso(now())}
+    heartbeats = db.session.scalars(select(WorkerHeartbeat).where(WorkerHeartbeat.seen_at > now() - timedelta(days=1)).order_by(WorkerHeartbeat.seen_at.desc()).limit(20)).all()
+    return {"jobs": counts, "oldest_queued_at": iso(oldest), "asOf": iso(now()),
+            "workers": [{"id": item.id, "last_seen_at": iso(item.seen_at), "last_success_at": iso(item.succeeded_at),
+                         "recent": item.seen_at.replace(tzinfo=timezone.utc) > now() - timedelta(minutes=2),
+                         "failed_stages": item.failed_stages} for item in heartbeats],
+            "evidence_scanner_configured": bool(current_app.config["CLAMAV_HOST"])}

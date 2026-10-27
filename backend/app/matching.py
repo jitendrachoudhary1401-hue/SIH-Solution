@@ -32,12 +32,12 @@ def hybrid(cosine, logit, category_agrees, weights=None):
 
 class LocalModels:
     def __init__(self, root):
-        import torch
-        from sentence_transformers import SentenceTransformer, CrossEncoder
         root = Path(root)
         manifest = root / "manifest.json"
         if not manifest.exists():
             raise RuntimeError("Local models are not installed. Run backend/download_models.py, then retry matching.")
+        import torch
+        from sentence_transformers import SentenceTransformer, CrossEncoder
         self.manifest = json.loads(manifest.read_text(encoding="utf-8"))
         self.encoder = SentenceTransformer(str(root / "embedding"), device="cpu", local_files_only=True, trust_remote_code=False)
         self.reranker = CrossEncoder(str(root / "reranker"), device="cpu", local_files_only=True, trust_remote_code=False,
@@ -152,6 +152,8 @@ def process(case_id, revision, models=None):
                     "explanation": "Same verified institution. Category agreement is structured evidence; shared terms are lexical evidence, not neural attribution. Incident dates and verified references were not supplied; their weights are excluded."}
         pair = db.session.scalar(select(Pair).where(Pair.case_a_id == a, Pair.case_b_id == b))
         if pair:
+            if pair.evidence.get("revisions") != evidence["revisions"]:
+                pair.state = "pending"
             pair.run_id, pair.evidence, pair.band = run.id, evidence, band
             pair.version += 1
         else:

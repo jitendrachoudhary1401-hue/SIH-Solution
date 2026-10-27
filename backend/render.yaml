@@ -56,3 +56,58 @@ services:
         sync: false
       - key: SENDGRID_FROM_NAME
         value: OneCase
+      - key: CLAMAV_HOST
+        fromService:
+          type: pserv
+          name: onecase-scanner
+          property: host
+      - key: CLAMAV_PORT
+        value: "3310"
+  - type: worker
+    name: onecase-worker
+    runtime: python
+    branch: dev
+    autoDeployTrigger: checksPass
+    rootDir: backend
+    plan: standard
+    buildCommand: pip install -r requirements.txt -r requirements-models.txt && python download_models.py
+    startCommand: python worker.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: APP_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: STORAGE_BACKEND
+        value: neon
+      - key: STORAGE_BUCKET
+        value: assets
+      - key: DATABASE_URL
+        fromService: {type: web, name: onecase-api, envVarKey: DATABASE_URL}
+      - key: SECRET_KEY
+        fromService: {type: web, name: onecase-api, envVarKey: SECRET_KEY}
+      - key: MFA_ENCRYPTION_KEY
+        fromService: {type: web, name: onecase-api, envVarKey: MFA_ENCRYPTION_KEY}
+      - key: FRONTEND_PROXY_SECRET
+        fromService: {type: web, name: onecase-api, envVarKey: FRONTEND_PROXY_SECRET}
+      - key: RATE_LIMIT_STORAGE_URI
+        fromService: {type: web, name: onecase-api, envVarKey: RATE_LIMIT_STORAGE_URI}
+      - key: NEON_STORAGE_ACCESS_KEY_ID
+        fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_ACCESS_KEY_ID}
+      - key: NEON_STORAGE_SECRET_ACCESS_KEY
+        fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_SECRET_ACCESS_KEY}
+      - key: NEON_STORAGE_ENDPOINT
+        fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_ENDPOINT}
+      - key: NEON_STORAGE_REGION
+        fromService: {type: web, name: onecase-api, envVarKey: NEON_STORAGE_REGION}
+      - key: CLAMAV_HOST
+        fromService: {type: pserv, name: onecase-scanner, property: host}
+      - key: CLAMAV_PORT
+        value: "3310"
+  - type: pserv
+    name: onecase-scanner
+    runtime: image
+    plan: standard
+    image:
+      url: docker.io/clamav/clamav:stable

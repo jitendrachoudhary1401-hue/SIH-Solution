@@ -68,11 +68,29 @@ def create_app(config=None):
         FRONTEND_PROXY_SECRET=os.getenv("FRONTEND_PROXY_SECRET", ""),
     )
     app.config.update(config or {})
+    configured_models = Path(app.config["MODEL_PATH"]).expanduser()
+    workspace_models = runtime / "models"
+    if (app.config["APP_ENV"] != "production" and not (configured_models / "manifest.json").exists()
+            and (workspace_models / "manifest.json").exists() and not (config or {}).get("MODEL_PATH")):
+        app.logger.warning("Configured model directory is unavailable; using the existing local workspace model bundle.")
+        app.config["MODEL_PATH"] = str(workspace_models)
     if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_size": 3, "max_overflow": 2, "pool_timeout": 5, "pool_recycle": 300,
                                                     "connect_args": {"connect_timeout": 15, "prepare_threshold": None}}
     if app.config["APP_ENV"] == "production" and (not app.config["COOKIE_SECURE"] or not app.config["SECRET_KEY"] or not app.config["MFA_ENCRYPTION_KEY"]):
         raise RuntimeError("Production requires secure HTTPS cookies, SECRET_KEY and MFA_ENCRYPTION_KEY.")
+    if app.config["APP_ENV"] == "production":
+        if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
+            raise RuntimeError("Production requires PostgreSQL; local SQLite is development-only.")
+        if len(app.config["FRONTEND_PROXY_SECRET"]) < 32:
+            raise RuntimeError("Production requires a shared FRONTEND_PROXY_SECRET of at least 32 characters on Render and Vercel.")
+        from cryptography.fernet import Fernet
+        try:
+            Fernet(app.config["MFA_ENCRYPTION_KEY"].encode())
+        except (ValueError, TypeError) as error:
+            raise RuntimeError("Production requires a valid MFA encryption key.") from error
+        if app.config["STORAGE_BACKEND"] != "neon" or not all(app.config.get(key) for key in ("AWS_ENDPOINT_URL_S3", "AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")):
+            raise RuntimeError("Production requires complete private Neon evidence-storage configuration.")
     Path(app.config["STORAGE_PATH"]).mkdir(parents=True, exist_ok=True)
     db.init_app(app)
     Migrate(app, db)

@@ -4,9 +4,9 @@ from flask import Blueprint, abort, g
 from pydantic import Field, field_validator
 from sqlalchemy import select
 from .models import (db, now, iso, User, Session, RoleAssignment, PermissionGrant, Grant, Appointment,
-                     Proceeding, Complaint, CaseConflict, MilestonePolicy, ActionEvent)
+                     Proceeding, Complaint, CaseConflict, MilestonePolicy, ActionEvent, Institution, Job)
 from .auth import authenticated, require_admin, roles, ROLES, PUBLIC_ROLES, OPERATIONS
-from .api import Input, parse, user_json, hasher, event
+from .api import Input, parse, user_json, hasher, event, institution_json, enqueue
 from .security import require_recent_auth, compromised_password
 
 administration_api = Blueprint("administration", __name__)
@@ -15,6 +15,10 @@ administration_api = Blueprint("administration", __name__)
 class Approval(Input):
     approval_reference: str = Field(min_length=5, max_length=200)
     reason: str = Field(min_length=5, max_length=1000)
+
+
+class InstitutionVerification(Approval):
+    external_id: str = Field(min_length=1, max_length=60)
 
 
 class AccountInput(Approval):
@@ -87,6 +91,41 @@ class PolicyInput(Approval):
 def admin_access():
     require_admin()
     require_recent_auth()
+
+
+@administration_api.get("/admin/institutions")
+@authenticated
+def institution_review_queue():
+    require_admin()
+    query = select(Institution).where(Institution.verified.is_(False)).order_by(Institution.id).limit(100)
+    return {"items": [institution_json(item) for item in db.session.scalars(query)]}
+
+
+@administration_api.post("/admin/institutions/<int:institution_id>/verify")
+@authenticated
+def verify_institution(institution_id):
+    admin_access()
+    data = parse(InstitutionVerification)
+    institution = db.session.get(Institution, institution_id)
+    if not institution:
+        abort(404)
+    if institution.verified and institution.external_id != data.external_id:
+        abort(409, description="A verified institution identifier cannot be silently reassigned.")
+    duplicate = db.session.scalar(select(Institution.id).where(Institution.external_id == data.external_id, Institution.id != institution.id))
+    if duplicate:
+        abort(409, description="This identifier belongs to another institution. Review the identity records; they cannot be merged automatically.")
+    institution.external_id, institution.verified = data.external_id, True
+    for case in db.session.scalars(select(Complaint).where(Complaint.institution_id == institution.id)):
+        enqueue(case)
+        job = db.session.scalar(select(Job).where(Job.complaint_id == case.id, Job.revision == case.content_revision))
+        if job and job.state not in ("queued", "running"):
+            job.state, job.attempts, job.available_at, job.error, job.lease_until = "queued", 0, now(), None, None
+        event(case, "institution_verified", "Institution identity verified from recorded evidence", data.reason,
+              {"institution_id": institution.id, "external_id": data.external_id, "approval_reference": data.approval_reference})
+    event(None, "institution_verified", "Institution reference data verified", data.reason,
+          {"institution_id": institution.id, "external_id": data.external_id, "approval_reference": data.approval_reference})
+    db.session.commit()
+    return institution_json(institution)
 
 
 def revoke_sessions(user_id):

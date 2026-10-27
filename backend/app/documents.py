@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from flask import current_app
 from sqlalchemy import select
+from botocore.exceptions import BotoCoreError, ClientError
 from .models import db, Attachment, now, Complaint
 
 
@@ -42,7 +43,7 @@ def scan_file(path):
 
 def scan_pending(limit=10):
     from .api import event
-    attachments = db.session.scalars(select(Attachment).where(Attachment.scan_state == "pending").order_by(Attachment.id).limit(limit)).all()
+    attachments = db.session.scalars(select(Attachment).where(Attachment.scan_state == "pending").order_by(Attachment.scan_checked_at.asc().nullsfirst(), Attachment.id).limit(limit)).all()
     for item in attachments:
         try:
             from .storage import read
@@ -53,7 +54,7 @@ def scan_pending(limit=10):
                 state, detail = scan_file(path)
         except ValueError:
             state, detail = "rejected", "Document validation failed. Original evidence is quarantined."
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired, BotoCoreError, ClientError, RuntimeError):
             state, detail = "pending", "Validation/scanner unavailable or exceeded limits. Evidence remains quarantined."
         item.scan_state, item.scan_detail, item.scan_checked_at = state, detail, now()
         if state != "pending":

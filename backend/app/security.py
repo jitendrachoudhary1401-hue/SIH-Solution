@@ -12,7 +12,7 @@ from flask import Blueprint, abort, current_app, g
 from pydantic import Field
 from .models import db, now, User, Session, PasswordReset
 from .auth import authenticated, digest, roles
-from .api import Input, parse, hasher, event
+from .api import Input, parse, hasher, event, sign_in_response
 
 security_api = Blueprint("security", __name__)
 
@@ -135,8 +135,9 @@ def confirm_mfa():
     g.user.recovery_codes = [digest(c) for c in codes]
     db.session.query(Session).filter(Session.user_id == g.user.id, Session.id != g.session.id).delete()
     event(None, "mfa_enabled", "MFA enabled and other sessions revoked")
-    db.session.commit()
-    return {"recovery_codes": codes, "message": "Store these one-time codes safely. They are displayed once."}
+    # Rotate the restricted enrollment cookie and CSRF token when graduating to
+    # a full session. A password-only token must never gain privileged access.
+    return sign_in_response(g.user, {"recovery_codes": codes, "message": "Store these one-time codes safely. They are displayed once."})
 
 
 @security_api.post("/auth/password")

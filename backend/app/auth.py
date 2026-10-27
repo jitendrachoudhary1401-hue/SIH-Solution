@@ -9,6 +9,7 @@ from .models import (db, Complaint, Grant, Session, now, RoleAssignment, Permiss
 
 ROLES = {"officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
 PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
+MFA_ROLES = {"lead", "reviewer", "committee", "verifier", "admin"}
 OPERATIONS = {"case.read", "case.transition", "case.transfer", "case.route", "case.packet", "documents.read",
               "case.export", "audit.read", "monitor.aggregate", "case.proceeding", "case.compliance"}
 
@@ -41,6 +42,11 @@ def effective_grants(user):
     return cache[user.id]
 
 
+def requires_mfa_enrollment(user):
+    return (current_app.config["APP_ENV"] == "production" and not user.is_demo
+            and not user.mfa_enabled and bool(roles(user) & MFA_ROLES))
+
+
 def authenticated(fn):
     @wraps(fn)
     def wrapped(*args, **kwargs):
@@ -57,6 +63,10 @@ def authenticated(fn):
             import hmac
             if not hmac.compare_digest(request.headers.get("X-CSRF-Token", ""), session.csrf):
                 abort(403, description="Invalid request token. Refresh and try again.")
+        if requires_mfa_enrollment(g.user) and request.path not in {
+                "/api/auth/me", "/api/auth/security", "/api/auth/mfa/setup", "/api/auth/mfa/confirm",
+                "/api/auth/reauthenticate", "/api/auth/logout"}:
+            abort(403, description="Complete authenticator enrollment before accessing the workspace.")
         if now() - session.last_seen_at.replace(tzinfo=timezone.utc) > timedelta(minutes=1):
             session.last_seen_at = now()
             db.session.commit()
