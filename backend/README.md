@@ -127,8 +127,6 @@ in the backend log without credentials, reset links or message bodies. A failed
 delivery invalidates its token; request a new link after fixing the provider.
 Apply migration `d72fa0981c43` before using password recovery.
 
-### Registration pages
-
 ### Public demo accounts
 
 On a public synthetic demonstration deployment, set

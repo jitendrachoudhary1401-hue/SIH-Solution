@@ -53,7 +53,8 @@ test('officer creates, acts on, disposes, reopens, and transfers a case', async 
   await expect(page.getByRole('heading', { name: 'Sign in to OneCase' })).toBeVisible();
   await signIn(page, 'lead.pgrc@onecase.demo');
   await page.getByRole('link', { name: 'Complaints', exact: true }).click();
-  await page.getByRole('link', { name: reference, exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Complaints', exact: true })).toBeVisible();
+  await page.getByRole('table').getByRole('link', { name: reference, exact: true }).click();
   await page.getByRole('button', { name: 'Acknowledge transfer' }).click();
   await expect(page.getByRole('button', { name: 'Acknowledge transfer' })).not.toBeVisible();
   expect(errors).toEqual([]);
