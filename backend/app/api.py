@@ -358,6 +358,9 @@ def logout():
 @api.get("/directory")
 @authenticated
 def directory():
+    from .auth import PUBLIC_ROLES
+    if g.user.role in PUBLIC_ROLES:
+        return {"bureaus": [], "officers": [], "participants": [], "categories": CATEGORIES, "deadline_rules": []}
     return {"bureaus": [{"id": x.id, "code": x.code, "name": x.name} for x in db.session.scalars(select(Bureau).order_by(Bureau.code))],
             "officers": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role.in_(["officer", "lead"])).order_by(User.name))],
             "participants": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role != "admin").order_by(User.name))],
