@@ -147,3 +147,9 @@ and deadline monitoring. Re-enabling scanning immediately blocks unscanned
 downloads and evidence use until the worker scans those files. No migration or
 private environment file change is required. The repository update does not alter
 Render environment values or delete any already-provisioned cloud service.
+
+Bypass verification: the full backend suite passed (92 tests before adding the
+closure-report regression); the final five bypass tests also passed, including
+that additional regression. The frontend production build and two browser checks
+(bypass labels/access changes and the existing officer evidence/closure workflow)
+passed. These use disposable synthetic data, not deployed complaint records.
