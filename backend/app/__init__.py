@@ -43,6 +43,7 @@ def create_app(config=None):
         MODEL_PATH=os.getenv("MODEL_PATH", str(runtime / "models")),
         SECRET_KEY=os.getenv("SECRET_KEY"),
         APP_ENV=os.getenv("APP_ENV", "development"),
+        DEMO_ACCOUNTS_ENABLED=os.getenv("DEMO_ACCOUNTS_ENABLED", "false").lower() == "true",
         MFA_ENCRYPTION_KEY=os.getenv("MFA_ENCRYPTION_KEY", ""),
         SESSION_IDLE_MINUTES=int(os.getenv("SESSION_IDLE_MINUTES", "30")),
         STEP_UP_MINUTES=int(os.getenv("STEP_UP_MINUTES", "10")),
@@ -80,11 +81,13 @@ def create_app(config=None):
     from .administration import administration_api
     from .security import security_api
     from .password_reset import password_reset_api
+    from .demo import demo_api
     app.register_blueprint(api, url_prefix="/api")
     app.register_blueprint(workflow_api, url_prefix="/api")
     app.register_blueprint(administration_api, url_prefix="/api")
     app.register_blueprint(security_api, url_prefix="/api")
     app.register_blueprint(password_reset_api, url_prefix="/api")
+    app.register_blueprint(demo_api, url_prefix="/api")
     register(app)
 
     @app.before_request

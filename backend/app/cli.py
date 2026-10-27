@@ -87,6 +87,17 @@ def configure_demo_access(password="OneCaseDemo!2026"):
 
 
 def register(app):
+    @app.cli.command("create-demo-accounts")
+    def create_demo_accounts():
+        """Create public demo identities, preserving existing users and the sole administrator."""
+        from .demo import seed_public_demo_accounts
+        try:
+            created = seed_public_demo_accounts()
+        except ValueError as error:
+            db.session.rollback()
+            raise click.ClickException(str(error)) from error
+        click.echo(f"Created {created} demo accounts. Set DEMO_ACCOUNTS_ENABLED=true to enable the role chooser.")
+
     @app.cli.command("configure-demo-access")
     def demo_access():
         configure_demo_access()

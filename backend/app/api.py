@@ -122,6 +122,7 @@ def body():
 
 def user_json(user):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
+            "is_demo": user.is_demo,
             "requested_role": user.requested_role, "organization": user.organization or "",
             "approval_pending": user.role == "pending",
             "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Assigned scope",
@@ -318,6 +319,10 @@ def login():
         return {"error": {"message": "Enter a valid authenticator or one-time recovery code.", "status": 403, "mfa_required": True}}, 403
     if current_app.config["APP_ENV"] == "production" and roles(user) & {"lead", "reviewer", "committee", "verifier", "admin"} and not user.mfa_enabled:
         abort(403, description="Privileged production access requires MFA enrollment through the approved administrator process.")
+    return sign_in_response(user)
+
+
+def sign_in_response(user):
     old = request.cookies.get("onecase_session")
     if old and (old_session := db.session.get(Session, digest(old))):
         db.session.delete(old_session)
@@ -364,6 +369,11 @@ def directory():
     from .auth import PUBLIC_ROLES
     if g.user.role in PUBLIC_ROLES:
         return {"bureaus": [], "officers": [], "participants": [], "categories": CATEGORIES, "deadline_rules": []}
+    if g.user.is_demo:
+        demo_users = db.session.scalars(select(User).where(User.is_demo.is_(True), User.active.is_(True))).all()
+        return {"bureaus": [{"id": x.id, "code": x.code, "name": x.name} for x in db.session.scalars(select(Bureau).where(Bureau.code == "PUBLIC-DEMO"))],
+                "officers": [user_json(x) for x in demo_users if x.role in {"officer", "lead"}],
+                "participants": [user_json(x) for x in demo_users], "categories": CATEGORIES, "deadline_rules": [{"id": "none", "name": "No automatic deadline"}]}
     return {"bureaus": [{"id": x.id, "code": x.code, "name": x.name} for x in db.session.scalars(select(Bureau).order_by(Bureau.code))],
             "officers": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role.in_(["officer", "lead"])).order_by(User.name))],
             "participants": [user_json(x) for x in db.session.scalars(select(User).where(User.active.is_(True), User.role != "admin").order_by(User.name))],
@@ -376,6 +386,8 @@ def directory():
 def institutions():
     # Directory identity is public within the provisioned workspace; case counts remain scoped.
     query = select(Institution)
+    if g.user.is_demo:
+        query = query.where(Institution.external_id == "ONECASE-PUBLIC-DEMO")
     if request.args.get("q"):
         term = "%" + request.args["q"][:120] + "%"
         query = query.where(or_(Institution.name.ilike(term), Institution.external_id.ilike(term)))
@@ -387,6 +399,8 @@ def institutions():
 def institution_detail(item_id):
     inst = db.session.get(Institution, item_id)
     if not inst:
+        abort(404)
+    if g.user.is_demo and inst.external_id != "ONECASE-PUBLIC-DEMO":
         abort(404)
     return institution_json(inst)
 
@@ -427,6 +441,8 @@ def register_case():
         abort(422, description="Choose either an illustrative rule or an explicit deadline.")
     institution = db.session.get(Institution, data.institution_id)
     owner = db.session.get(User, data.owner_id)
+    if g.user.is_demo and (not institution or institution.external_id != "ONECASE-PUBLIC-DEMO" or not owner or not owner.is_demo):
+        abort(422, description="Demo complaints must use the demonstration institution and demo officers.")
     if not institution or not owner or not owner.active or owner.bureau_id != g.user.bureau_id or owner.role not in ("officer", "lead"):
         abort(422, description="Select an institution and an active accountable officer in your bureau.")
     if "lead" not in roles() and owner.id != g.user.id:
@@ -593,6 +609,8 @@ def transfer(case_id):
     data = parse(TransferChange)
     check_version(case, data.version)
     recipient = db.session.get(User, data.owner_id)
+    if recipient and recipient.is_demo != g.user.is_demo:
+        abort(422, description="Transfers must stay within the same demo or operational workspace.")
     if not recipient or not recipient.active or recipient.role not in ("officer", "lead") or not recipient.bureau_id or recipient.id == case.owner_id:
         abort(422, description="Choose a different active receiving officer.")
     old_owner, old_bureau = case.owner_id, case.bureau.code

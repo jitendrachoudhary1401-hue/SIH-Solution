@@ -129,6 +129,25 @@ Apply migration `d72fa0981c43` before using password recovery.
 
 ### Registration pages
 
+### Public demo accounts
+
+On a public synthetic demonstration deployment, set
+`DEMO_ACCOUNTS_ENABLED=true` in Render and redeploy. `python migrate.py`
+then provisions 12 persistent demo identities: student, parent, faculty, staff,
+other, officer, lead, reviewer, committee, verifier, executive and auditor.
+Alternatively, run `python -m flask --app app create-demo-accounts` after
+migrations. Both operations preserve existing accounts and are safe to repeat.
+
+The sign-in page's **Demo accounts** button opens a role chooser. Demo sessions
+are issued only for explicitly marked, active demo identities. Demo accounts
+cannot become administrators or change shared credentials. Case access and
+directory entries are restricted to the synthetic `PUBLIC-DEMO` bureau and
+demonstration institution. The existing single administrator uses regular
+sign-in. No complaint records are inserted by demo-account provisioning, so
+new demo workspaces begin at zero. Disable the flag to turn off demo sign-in.
+
+### Registration behavior
+
 The frontend provides `/register/student-parent` and `/register/other`, linked
 from sign-in. Both submit to `POST /api/auth/register` and persist accounts with
 Argon2 password hashes. Students, parents, faculty, institution staff and other

@@ -37,7 +37,7 @@ def deliver_reset(app, email):
     with app.app_context():
         token_id = None
         try:
-            user = db.session.scalar(select(User).where(User.email == email, User.active.is_(True)))
+            user = db.session.scalar(select(User).where(User.email == email, User.active.is_(True), User.is_demo.is_(False)))
             if not user:
                 return
             token = issue_token(user)

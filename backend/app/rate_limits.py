@@ -26,7 +26,7 @@ def configure(app):
         if endpoint in {"frontend", "health"}:
             continue
         wrapped = writes(view)
-        if endpoint in {"api.login", "api.signup"}:
+        if endpoint in {"api.login", "api.signup", "demo.demo_login"}:
             wrapped = limiter.limit(os.getenv("RATE_LIMIT_LOGIN", "5 per minute"), override_defaults=False)(wrapped)
         elif endpoint == "password_reset.forgot_password":
             def reset_account_key():

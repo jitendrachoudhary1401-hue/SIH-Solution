@@ -46,6 +46,9 @@ with tempfile.TemporaryDirectory(prefix="onecase-e2e-") as directory:
     with app.app_context():
         db.create_all()
         seed_demo("OneCaseDemo!2026")
+        from app.demo import seed_public_demo_accounts
+        seed_public_demo_accounts()
+        app.config["DEMO_ACCOUNTS_ENABLED"] = True
         monitor()
         if os.getenv("E2E_MATCHING") == "1":
             from app.matching import process

@@ -35,6 +35,7 @@ class User(db.Model):
     organization = db.Column(db.String(200))
     bureau_id = db.Column(db.Integer, db.ForeignKey("bureau.id"))
     active = db.Column(db.Boolean, nullable=False, default=True)
+    is_demo = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     mfa_secret = db.Column(db.Text)
     mfa_pending_secret = db.Column(db.Text)
     mfa_enabled = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())

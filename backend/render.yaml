@@ -16,6 +16,8 @@ services:
         value: production
       - key: COOKIE_SECURE
         value: "true"
+      - key: DEMO_ACCOUNTS_ENABLED
+        value: "false"
       - key: STORAGE_BACKEND
         value: neon
       - key: STORAGE_BUCKET

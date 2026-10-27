@@ -5,7 +5,7 @@ from datetime import timedelta, timezone
 from flask import abort, current_app, g, request, has_request_context
 from sqlalchemy import and_, or_, select
 from .models import (db, Complaint, Grant, Session, now, RoleAssignment, PermissionGrant,
-                     Appointment, Proceeding, CaseConflict)
+                     Appointment, Proceeding, CaseConflict, Bureau)
 
 ROLES = {"officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
 PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
@@ -28,6 +28,8 @@ def roles(user=None):
         return cache[user.id]
     assigned = set(db.session.scalars(select(RoleAssignment.role).where(RoleAssignment.user_id == user.id, live(RoleAssignment))))
     result = ({user.role} | assigned) & (ROLES | PUBLIC_ROLES)
+    if user.is_demo:
+        result.discard("admin")
     cache[user.id] = result
     return result
 
@@ -47,6 +49,8 @@ def authenticated(fn):
         if not session or session.expires_at.replace(tzinfo=timezone.utc) <= now() or not session.user.active or now() - session.last_seen_at.replace(tzinfo=timezone.utc) > timedelta(minutes=current_app.config["SESSION_IDLE_MINUTES"]):
             abort(401, description="Your session has expired. Please sign in.")
         g.user, g.session = session.user, session
+        if g.user.is_demo and request.method not in ("GET", "HEAD", "OPTIONS") and request.path.startswith("/api/auth/") and request.path != "/api/auth/logout":
+            abort(403, description="Demo account credentials are managed by the system.")
         if g.user.role == "pending" and not request.path.startswith(("/api/auth/", "/api/account/")):
             abort(403, description="Your staff access request is awaiting administrator approval.")
         if request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -98,7 +102,10 @@ def scope(user=None, aggregate=False):
         conditions.append(Complaint.id.in_(proceedings))
     if aggregate and "executive" in effective:
         conditions.append(permission_scope("monitor.aggregate", user))
-    return and_(or_(*conditions), Complaint.id.not_in(conflict))
+    bounded = and_(or_(*conditions), Complaint.id.not_in(conflict))
+    if user.is_demo:
+        bounded = and_(bounded, Complaint.bureau_id.in_(select(Bureau.id).where(Bureau.code == "PUBLIC-DEMO")))
+    return bounded
 
 
 def has_permission(case, operation, user=None):

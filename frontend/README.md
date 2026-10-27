@@ -47,6 +47,12 @@ Keep individual uploads within the backend's deployed limit (default 3 MiB) and 
 
 ## Checks
 
+The sign-in page includes a **Demo accounts** role chooser. The backend must
+have `DEMO_ACCOUNTS_ENABLED=true` and provisioned demo identities. No demo
+password is embedded in the frontend. Phone and tablet layouts use a compact
+sign-in card, touch-sized controls and drawer navigation through 1100px;
+wide tables scroll inside their cards instead of widening the whole page.
+
 ```powershell
 npm run build
 npm run test:proxy
