@@ -51,5 +51,20 @@ The current committed migration head is `af4e310ce902`.
 4. Recheck the live demo-account list and direct demo sign-in after deployment.
 
 No production accounts, credentials or database schema were changed during
-this test run. Live account creation, authenticated workflows and email
-delivery remain unverified until the deployment issues are resolved.
+the initial test run.
+
+## Follow-up: approved production repair
+
+After the user explicitly approved the tested fix, the four pending migrations
+and demo-account provisioning were applied through Neon's prepared migration
+workflow. The changes were first validated on a temporary branch. Production
+is now at `af4e310ce902` with 12 demo identities; the temporary branch was deleted.
+No administrator or complaint records were created.
+
+The production Vercel demo-account listing now returns 200 and all 12 roles.
+Live Student and Lead demo sign-in, account summary and sign-out each return
+200; both summaries have zero cases. No private account passwords were used.
+
+The production frontend still needs a deployment of the updated `dev` branch
+to display the demo button and password-reset link. Actual SendGrid inbox
+delivery remains unverified.
