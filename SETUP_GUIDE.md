@@ -75,4 +75,14 @@ Do not put database URLs or service keys in any `VITE_*` variable. The serverles
 
 The Neon CLI/skills/MCP have been configured, the private bucket was provisioned, and actual Postgres/private-object/API checks passed on an isolated synthetic branch. Build/test command evidence is recorded in [Neon setup notes](docs/NEON_SETUP.md).
 
-You will enter Render/Vercel environment values and trigger their deployments yourself. Those public deployment URLs, platform environment values, GitHub branch protection, live Redis/scanner availability, production MFA/recovery readiness and real-data release controls are not proven by local files or a successful Neon test.
+Enter Render/Vercel environment values and connect the GitHub repository once.
+Use `dev` as Vercel's Production Branch and apply `backend/render.yaml` as the
+Render Blueprint (or set an existing service's linked branch to `dev` and
+Auto-Deploy to After CI Checks Pass). Subsequent pushes to `dev` deploy the
+frontend automatically; the API deploys after CI checks pass. Set Render's
+`PUBLIC_APP_URL` to the HTTPS frontend URL and configure SendGrid privately
+for password reset email. See [the release guide](.github/README.md).
+
+Live deployment URLs, platform environment values, GitHub branch protection,
+Redis/scanner availability, and production MFA/recovery readiness still require
+verification on the deployed services.

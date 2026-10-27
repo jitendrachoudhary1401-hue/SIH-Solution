@@ -2,6 +2,13 @@
 
 Flask/SQLAlchemy own authentication, object/field authorization, transactional case workflows, matching jobs, and private evidence access. Vercel serves the frontend; Render hosts this API; Neon supplies Postgres and the private `assets` bucket.
 
+The Render Blueprint follows `dev` with `autoDeployTrigger: checksPass`.
+Once the GitHub repository is connected and the Blueprint is applied, pushes
+to `dev` deploy after CI checks pass, run `python migrate.py` before deployment,
+and start `python serve.py`. Existing services not managed by this Blueprint
+need the same branch and Auto-Deploy settings entered once in Render.
+See [GitHub deployment instructions](../.github/README.md).
+
 ## Local setup
 
 Run from the repository root:

@@ -39,6 +39,12 @@ Only `VITE_*` variables are intentionally exposed to browser code. **Never put d
 
 6. Deploy, then verify `/officer/login`, a direct navigation to `/complaints`, and `/api/health` on the **Vercel** hostname.
 
+Set the Vercel **Production Branch to `dev`** for this repository. The committed
+`git.deploymentEnabled=true` enables Git deployments and `installCommand=npm ci`
+uses the lockfile. After this one-time connection and environment setup, pushes
+to `dev` automatically deploy the frontend. Other branches produce previews.
+See [GitHub deployment instructions](../.github/README.md) for CI behavior.
+
 `api/proxy.js` runs on Vercel's server. It forwards `/api/*` to Render, forwards the session cookie/CSRF header, and keeps the browser on one origin. This avoids relying on third-party cookies between unrelated Vercel and Render domains. It forwards credentials only to the configured backend and does not expose service keys. It does not fetch arbitrary user-supplied URLs.
 
 The proxy validates write origins before forwarding them. API responses use `no-store`. Original evidence is downloaded through authorized Flask endpoints rather than public S3 links.
