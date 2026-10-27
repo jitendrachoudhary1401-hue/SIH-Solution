@@ -100,7 +100,8 @@ test('reviewer compares real model evidence and records a decision', async ({ pa
   test.skip(process.env.E2E_MATCHING !== '1', 'Run with E2E_MATCHING=1 after downloading local models.');
   await signIn(page, 'reviewer@onecase.demo');
   await page.getByRole('link', { name: 'Overlap review', exact: true }).click();
-  await page.getByRole('link', { name: /OC-2026-00001/ }).click();
+  await expect(page.getByRole('heading', { name: 'Overlap review', exact: true })).toBeVisible();
+  await page.locator('a.pair-card').filter({ hasText: 'OC-2026-00001' }).filter({ hasText: 'OC-2026-00002' }).click();
   await expect(page.getByRole('heading', { name: 'Possible overlap' })).toBeVisible();
   await expect(page.getByText('Cross-Encoder raw logit')).toBeVisible();
   await page.getByLabel('Decision', { exact: true }).selectOption('related');

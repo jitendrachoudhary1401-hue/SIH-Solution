@@ -9,6 +9,9 @@ legacy_runtime = Path(__file__).resolve().parents[1] / ".runtime"
 if os.getenv("APP_ENV", "development") != "production" and legacy_runtime.exists():
     runtime = legacy_runtime
 root = Path(os.getenv("MODEL_PATH", str(runtime / "models")))
+if (os.getenv("APP_ENV", "development") != "production" and not (root / "manifest.json").exists()
+        and (runtime / "models" / "manifest.json").exists()):
+    root = runtime / "models"
 root.mkdir(parents=True, exist_ok=True)
 manifest = json.loads((Path(__file__).resolve().parent / "model-bundle.json").read_text(encoding="utf-8"))
 for kind, model in manifest.items():

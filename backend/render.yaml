@@ -108,6 +108,7 @@ services:
   - type: pserv
     name: onecase-scanner
     runtime: image
-    plan: standard
+    # ClamAV recommends 3-4 GiB for loading and refreshing its signatures.
+    plan: pro
     image:
       url: docker.io/clamav/clamav:stable

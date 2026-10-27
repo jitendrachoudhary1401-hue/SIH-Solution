@@ -33,10 +33,18 @@ def scan_file(path):
             while chunk := content.read(65536):
                 connection.sendall(struct.pack("!I", len(chunk)) + chunk)
         connection.sendall(struct.pack("!I", 0))
-        result = connection.recv(4096)
-    if b"FOUND" in result:
+        result = b""
+        while b"\0" not in result and len(result) < 4096:
+            chunk = connection.recv(4096 - len(result))
+            if not chunk:
+                break
+            result += chunk
+    if b"\0" not in result:
+        return "pending", "Scanner did not confirm a complete result."
+    result = result.split(b"\0", 1)[0]
+    if result.endswith(b" FOUND"):
         return "rejected", "Malware check rejected this evidence."
-    if result.rstrip(b"\0\r\n").endswith(b"OK"):
+    if result == b"stream: OK":
         return "clean", "Parser and malware checks completed."
     return "pending", "Scanner did not confirm a clean result."
 

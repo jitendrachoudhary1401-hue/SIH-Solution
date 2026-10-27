@@ -80,6 +80,8 @@ def create_app(config=None):
     if app.config["APP_ENV"] == "production" and (not app.config["COOKIE_SECURE"] or not app.config["SECRET_KEY"] or not app.config["MFA_ENCRYPTION_KEY"]):
         raise RuntimeError("Production requires secure HTTPS cookies, SECRET_KEY and MFA_ENCRYPTION_KEY.")
     if app.config["APP_ENV"] == "production":
+        if len(app.config["SECRET_KEY"]) < 32:
+            raise RuntimeError("Production requires a random SECRET_KEY of at least 32 characters.")
         if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql"):
             raise RuntimeError("Production requires PostgreSQL; local SQLite is development-only.")
         if len(app.config["FRONTEND_PROXY_SECRET"]) < 32:

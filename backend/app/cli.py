@@ -6,6 +6,9 @@ from .models import db, now, Bureau, User, Institution, Complaint, Assignment, G
 
 
 def seed_demo(password):
+    from flask import current_app
+    if current_app.config["APP_ENV"] == "production":
+        raise click.ClickException("Known-password synthetic seeds are disabled in production. Use opt-in public demo identities or provision approved users.")
     from .api import hasher, event, enqueue
     if db.session.scalar(select(User.id).limit(1)):
         raise click.ClickException("Database already contains users. Demo seed will not overwrite existing data.")
@@ -60,6 +63,9 @@ def seed_demo(password):
 
 def configure_demo_access(password="OneCaseDemo!2026"):
     """Explicit synthetic access grants; never silently applied to non-demo accounts."""
+    from flask import current_app
+    if current_app.config["APP_ENV"] == "production":
+        raise click.ClickException("Known-password synthetic access setup is disabled in production.")
     from .api import hasher
     for name, email, role in [("Isha Verma", "verifier@onecase.demo", "verifier"), ("Anil Desai", "committee@onecase.demo", "committee"), ("Sana Khan", "monitor@onecase.demo", "executive")]:
         if not db.session.scalar(select(User).where(User.email == email)):

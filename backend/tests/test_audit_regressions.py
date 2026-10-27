@@ -166,6 +166,13 @@ def test_milestone_reminders_respect_scope_and_are_idempotent(app):
         monitor(); monitor()
         reminders=db.session.scalars(select(Notification).where(Notification.dedup_key.like(f'milestone:{milestone.id}:%'))).all()
         assert len(reminders)==1 and reminders[0].user_id==member_id
+        assert db.session.get(Complaint,1).status!='disposed'
+        db.session.get(Complaint,1).status='disposed'
+        milestone.revision+=1
+        db.session.commit()
+        monitor()
+        # Internal closure does not stop a separate unfinished proceeding clock.
+        assert len(db.session.scalars(select(Notification).where(Notification.dedup_key.like(f'milestone:{milestone.id}:%'))).all())==2
 
 
 def test_proxy_client_identity_requires_the_shared_secret(tmp_path,monkeypatch):
@@ -219,3 +226,12 @@ def test_production_rejects_unsafe_deployment_configuration(changes,expected):
         'STORAGE_BACKEND':'neon','AWS_ENDPOINT_URL_S3':'https://storage.example.test','AWS_REGION':'test',
         'AWS_ACCESS_KEY_ID':'synthetic','AWS_SECRET_ACCESS_KEY':'synthetic'}
     with pytest.raises(RuntimeError,match=expected): create_app({**settings,**changes})
+
+
+def test_known_password_seed_cannot_run_in_production(app):
+    import click
+    from app.cli import seed_demo,configure_demo_access
+    app.config['APP_ENV']='production'
+    with app.app_context():
+        for command in (lambda:seed_demo('OneCaseDemo!2026'),configure_demo_access):
+            with pytest.raises(click.ClickException,match='disabled in production'): command()

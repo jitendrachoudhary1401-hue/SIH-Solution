@@ -38,7 +38,7 @@ def monitor():
         proceeding = db.session.get(Proceeding, milestone.proceeding_id)
         case = db.session.get(Complaint, proceeding.complaint_id)
         recipient = db.session.get(User, milestone.recipient_id)
-        if case.status == "disposed" or not recipient or not recipient.active:
+        if not recipient or not recipient.active:
             continue
         if not db.session.scalar(select(Complaint.id).where(Complaint.id == case.id, scope(recipient))) or not proceeding_allowed(proceeding, "read", recipient):
             continue
