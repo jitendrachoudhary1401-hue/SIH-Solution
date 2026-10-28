@@ -24,6 +24,40 @@ def location_key(value):
     return re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', value or '').casefold()).strip()
 
 
+ISSUE_WORD_FORMS = {
+    'fees': 'fee', 'charged': 'charge', 'charging': 'charge', 'charges': 'charge',
+    'excess': 'extra', 'excessive': 'extra', 'additional': 'extra',
+    'refunded': 'refund', 'refunds': 'refund', 'refunding': 'refund',
+    'reimbursement': 'refund', 'reimbursements': 'refund',
+    'received': 'receive', 'receiving': 'receive',
+    'cancelled': 'cancel', 'canceled': 'cancel', 'cancellation': 'cancel',
+    'withdrawn': 'withdraw', 'withdrawal': 'withdraw',
+    'withheld': 'withhold', 'withholding': 'withhold',
+    'documents': 'document', 'certificates': 'certificate',
+    'returned': 'return', 'returning': 'return',
+}
+ISSUE_STOP_WORDS = set('a an the by of to from for in on at and or my me i we our us is are was were be been being has have had do does did please college institution university'.split())
+NEGATIONS = {'not', 'no', 'never', 'without'}
+
+
+def wording_similarity(a, b):
+    """Explicit lexical rules, not an embedding model or a duplication probability."""
+    def terms(value):
+        value = re.sub(r"\b(\w+)n['’]t\b", r'\1 not', value)
+        return {ISSUE_WORD_FORMS.get(t, t) for t in re.findall(r'\b\w+\b', value) if t not in ISSUE_STOP_WORDS}
+    first, second = terms(a), terms(b)
+    shared = first & second
+    raw = (1.0 if a == b else 0.0) if max(len(a), len(b)) > 4000 else SequenceMatcher(None, a, b, autojunk=False).ratio()
+    # Removing a negation or changing an amount/date must not manufacture a match.
+    compatible = (first & NEGATIONS == second & NEGATIONS and
+                  {t for t in first if t.isdigit()} == {t for t in second if t.isdigit()})
+    normalized = 2 * len(shared) / (len(first) + len(second)) if first and second else 0.0
+    normalized_match = compatible and len(shared) >= 3 and normalized >= .90
+    score = max(raw, normalized if normalized_match else 0.0) if compatible else 0.0
+    return score, {'raw_wording': raw, 'normalized_issue_terms': normalized,
+                   'normalized_match': normalized_match, 'shared_terms': sorted(shared)[:12]}
+
+
 def is_stale(pair):
     return (pair.a.status == 'disposed' or pair.b.status == 'disposed' or not same_context(pair.a, pair.b) or
             pair.evidence.get('revisions') != {str(pair.a.id): pair.a.content_revision, str(pair.b.id): pair.b.content_revision})
@@ -152,8 +186,7 @@ def detect_text_overlaps(case):
         if not same_context(case, other):
             continue
         other_key = text_key(other.description)
-        # Long inputs are conservatively checked for full equality only; avoid quadratic work.
-        similarity = (1.0 if key == other_key else 0.0) if max(len(key), len(other_key)) > 4000 else SequenceMatcher(None, key, other_key, autojunk=False).ratio()
+        similarity, wording = wording_similarity(key, other_key)
         if similarity < .85:
             continue
         if other.status == 'disposed':
@@ -161,19 +194,20 @@ def detect_text_overlaps(case):
             continue
         a, b = sorted((case.id, other.id))
         pair = db.session.scalar(select(Pair).where(Pair.case_a_id == a, Pair.case_b_id == b).with_for_update())
-        if pair and not is_stale(pair):
+        if pair and not is_stale(pair) and (pair.state != 'pending' or pair.band != 'low'):
             alert_owners(pair)
             continue
         if run is None:
             run = MatchingRun(complaint_id=case.id, revision=case.content_revision,
-                              bundle={'scoring_version': 'text-similarity-v1', 'validated': False},
+                              bundle={'scoring_version': 'text-similarity-v2', 'normalization': 'issue-word-forms-v1', 'validated': False},
                               evidence={'method': 'text_similarity', 'candidate_limit': 200})
             db.session.add(run)
             db.session.flush()
         evidence = {'method': 'text_similarity', 'text_similarity': similarity, 'hybrid': similarity,
+                    'wording': wording,
                     'bundle': run.bundle, 'revisions': {str(case.id): case.content_revision, str(other.id): other.content_revision},
-                    'explanation': 'Strongly similar issue wording at the same reported incident location, verified institution and category. This text check is a suggestion, not proof of the same incident or a semantic model result.',
-                    'shared_terms': [], 'truncated': False}
+                    'explanation': 'Similar issue wording at the same reported incident location, verified institution and category. The wording check compares character similarity and normalized issue words, including common forms such as charged/charging and excess/extra. Word order may differ; negations and numbers are preserved. This is a suggestion for human review, not proof of a duplicate or a neural model result.',
+                    'shared_terms': wording['shared_terms'], 'truncated': False}
         if pair is None:
             pair = Pair(case_a_id=a, case_b_id=b, run_id=run.id, band='high', state='pending', evidence=evidence)
             db.session.add(pair)

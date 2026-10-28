@@ -177,7 +177,7 @@ CI uses a disposable database and synthetic records. Browser checks cover regist
 
 ## Current limits
 
-- Overlap suggestions require a verified institution, the same reported incident location and category, and similar issue text. The immediate text check uses a conservative 85% wording threshold; semantic paraphrase matching still needs installed models and a running worker. Exact location comparison normalizes case and whitespace, not aliases. Missing location is excluded. Accuracy, multilingual quality and load/uptime targets remain unvalidated; people decide relationships.
+- Overlap suggestions require a verified institution, the same reported incident location and category, and similar issue text. The immediate text check uses an 85% character-similarity threshold or at least 90% agreement across three or more normalized issue words (common word forms and limited synonyms), while preserving negations and numbers; semantic paraphrase matching still needs installed models and a running worker. Exact location comparison normalizes case and whitespace, not aliases. Missing location is excluded. Accuracy, multilingual quality and load/uptime targets remain unvalidated; people decide relationships.
 - Manual institution verification is implemented. Official registry integration, a staged bulk CSV importer and comprehensive issue-level matching remain future work; PDF export is available in the website; the CSV API remains for compatibility.
 - Milestone policy and competent authority must be recorded. Administrative disposal does not automatically conclude linked external proceedings or certify legal compliance.
 - Browser installation depends on browser support and eligibility. No offline access to private case data is promised.

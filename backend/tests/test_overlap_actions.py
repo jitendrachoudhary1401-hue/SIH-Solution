@@ -6,8 +6,42 @@ from app.models import (db, Complaint, User, Pair, Notification, CoordinationMem
 from app.api import enqueue, event
 from app.matching import process
 from test_matching import DeterministicModels
+from app.overlap_actions import wording_similarity, text_key
 
 TEXT = 'The tuition fee refund after timely withdrawal has still not been paid despite repeated written requests and receipt confirmation.'
+
+
+def test_reported_extra_fee_paraphrases_create_visible_pair_and_officer_alert(app,client):
+    a=record(app,'EXCESS',description='excess fees charged by college')
+    b=record(app,'EXTRA',description='college charging extra fees')
+    with app.app_context():
+        enqueue(db.session.get(Complaint,b));db.session.commit()
+    headers=login(client,'officer.rb@onecase.demo')
+    pairs=client.get('/api/overlaps?state=pending').json['items']
+    assert len(pairs)==1 and {pairs[0]['a']['id'],pairs[0]['b']['id']}=={a,b}
+    assert pairs[0]['evidence']['wording']['normalized_match']
+    assert set(pairs[0]['evidence']['shared_terms'])=={'extra','charge','fee'}
+    notes=[n for n in client.get('/api/notifications').json['items'] if n['kind']=='overlap']
+    assert len(notes)==2 and notes[0]['action_url']==f'/overlaps/{pairs[0]["id"]}'
+    assert client.get('/api/dashboard/summary').json['pending_pairs']==1
+    assert scan(client,headers)[0]['id']==pairs[0]['id']
+
+
+def test_word_form_matching_preserves_issue_negations_and_numbers():
+    for a,b in [('excess fees charged by college','college charging extra fees'),
+                ('college has not refunded fees','fees not refunded by the college')]:
+        assert wording_similarity(text_key(a),text_key(b))[0]>=.85
+    for a,b in [('college charging extra fees','college has not refunded fees'),
+                ('college charging extra fees','college not charging extra fees'),
+                ('extra fees charged 5000','extra fees charged 1000')]:
+        assert wording_similarity(text_key(a),text_key(b))[0]<.85
+
+
+def test_paraphrases_at_different_locations_do_not_overlap(app,client):
+    record(app,'EXCESS',description='excess fees charged by college')
+    record(app,'EXTRA',description='college charging extra fees',location='Other campus')
+    headers=login(client,'officer.rb@onecase.demo')
+    assert scan(client,headers)==[]
 
 
 def record(app, suffix, *, location='North campus accounts office', description=TEXT, status='received', received=None):
