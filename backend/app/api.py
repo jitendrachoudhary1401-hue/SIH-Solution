@@ -58,6 +58,9 @@ class SignupInput(Input):
     confirm_password: str = Field(min_length=12, max_length=1024)
     account_type: str
     organization: str = Field(default="", max_length=200)
+    faculty_name: str = Field(default='', max_length=150)
+    admission_year: int | None = Field(default=None, ge=1900, le=2100)
+    passout_year: int | None = Field(default=None, ge=1900, le=2100)
 
 
 class Registration(Input):
@@ -135,13 +138,16 @@ def body():
     return data
 
 
-def user_json(user):
-    return {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
+def user_json(user, include_profile=False):
+    result = {"id": user.id, "name": user.name, "email": user.email, "role": user.role,
             "is_demo": user.is_demo, "mfa_enrollment_required": requires_mfa_enrollment(user),
             "requested_role": user.requested_role, "organization": user.organization or "",
             "approval_pending": user.role == "pending",
             "bureau_id": user.bureau_id, "bureau": user.bureau.code if user.bureau else "Assigned scope",
             "roles": sorted(roles(user)), "capabilities": capabilities(user)}
+    if include_profile:
+        result.update(faculty_name=user.faculty_name, admission_year=user.admission_year, passout_year=user.passout_year)
+    return result
 
 
 def institution_json(inst):
@@ -174,6 +180,7 @@ def case_json(case, detail=False):
     result.update(issue_summary=case.issue_summary, complainant_type=case.complainant_type,
                   source_channel=case.source_channel, source_reference=case.source_reference, entered_at=iso(case.entered_at))
     result['handling_stage'] = flow.stage if flow else None
+    result['is_submitter'] = case.submitter_user_id == g.user.id
     if not has_content(case):
         result.update(issue_summary="", source_reference="", next_action="Details restricted to authorized case readers.")
     if detail:
@@ -301,6 +308,10 @@ def signup():
         abort(422, description="Enter a valid email address.")
     if data.account_type not in PUBLIC_ROLES | ROLES:
         abort(422, description="Choose a valid account type.")
+    if data.account_type in ('student', 'parent') and (len(data.faculty_name) < 2 or data.admission_year is None or data.passout_year is None):
+        abort(422, description='Provide the student faculty contact, admission year and expected or actual pass-out year.')
+    if data.admission_year is not None and data.passout_year is not None and data.passout_year < data.admission_year:
+        abort(422, description='Pass-out year cannot be earlier than admission year.')
     if data.password != data.confirm_password:
         abort(422, description="Passwords do not match.")
     if compromised_password(data.password):
@@ -312,7 +323,8 @@ def signup():
     # Staff signup records a request, never a privileged role or bureau grant.
     user = User(name=data.name, email=email, password_hash=hasher.hash(data.password),
                 role=data.account_type if data.account_type in PUBLIC_ROLES else "pending",
-                requested_role=data.account_type, organization=data.organization, bureau_id=None)
+                requested_role=data.account_type, organization=data.organization, bureau_id=None,
+                faculty_name=data.faculty_name, admission_year=data.admission_year, passout_year=data.passout_year)
     db.session.add(user)
     db.session.flush()
     event(None, "account_registered", "Account registered", actor=user,
@@ -376,7 +388,7 @@ def sign_in_response(user, extra=None):
     db.session.add(Session(id=digest(token), user_id=user.id, csrf=csrf, expires_at=now() + timedelta(seconds=lifetime)))
     event(None, "authenticated", "Officer sign-in completed", actor=user)
     db.session.commit()
-    response = make_response({"user": user_json(user), "csrf": csrf, **(extra or {})})
+    response = make_response({"user": user_json(user, True), "csrf": csrf, **(extra or {})})
     response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=lifetime)
     return response
 
@@ -384,7 +396,7 @@ def sign_in_response(user, extra=None):
 @api.get("/auth/me")
 @authenticated
 def me():
-    return {"user": user_json(g.user), "csrf": g.session.csrf}
+    return {"user": user_json(g.user, True), "csrf": g.session.csrf}
 
 
 @api.post("/auth/refresh")
@@ -394,7 +406,7 @@ def refresh():
     token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
     db.session.add(Session(id=digest(token), user_id=g.user.id, csrf=csrf, expires_at=g.session.expires_at, authenticated_at=g.session.authenticated_at))
     db.session.commit()
-    response = make_response({"user": user_json(g.user), "csrf": csrf})
+    response = make_response({"user": user_json(g.user, True), "csrf": csrf})
     response.set_cookie("onecase_session", token, httponly=True, secure=current_app.config["COOKIE_SECURE"], samesite="Strict", max_age=28800)
     return response
 

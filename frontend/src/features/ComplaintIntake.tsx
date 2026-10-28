@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, post, type Case, type Institution, type User } from '../lib/api';
@@ -16,6 +16,7 @@ export default function ComplaintIntake({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const key = useRef(crypto.randomUUID());
   const client = useQueryClient();
+  useEffect(() => { if (user.is_demo && options.data?.institutions.length === 1) setInstitution(String(options.data.institutions[0].id)); }, [user.is_demo,options.data]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(null); setBusy(true);
     try {

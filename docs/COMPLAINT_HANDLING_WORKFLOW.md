@@ -15,6 +15,10 @@ The faculty report is a recommendation. A claim that the complaint is false or a
 
 The new `faculty_reviewer` staff role is distinct from a public `faculty` complainant. Staff registration creates a pending request. An administrator must approve the staff account. Public faculty registration does not grant access to other people's complaints.
 
+Student/parent registration records the faculty contact name, admission year and expected/actual pass-out year. The year order is validated. A typed name never grants case access. These profile fields are returned only with the user's own authentication profile, not the staff directory.
+
+The isolated demo college preappoints Demo Faculty and the other synthetic staff identities to each demo complaint. Demo Faculty has an explicitly provisioned additional reviewer role and sees only its own submissions or specifically appointed demo reviews. Demo students cannot submit against another institution or create an unlisted college. This demo provisioning does not change real faculty privileges.
+
 The administrator, current accountable officer, or current bureau lead appoints approved participants on the complaint's handling timeline, recording an approval reference and reason. Each role must have a different person. The complainant and accounts with recorded case conflicts cannot be appointed. Record conflicts through the existing administration workspace when an accused or otherwise conflicted person must be excluded.
 
 Team access lasts 90 days from the recorded appointment/update and also depends on active roles, conflict checks and demo isolation. Renew or replace appointments through an approved team update. The existing audited transfer operation changes the accountable officer and updates the handling team. Team membership gives access to standard case evidence; restricted evidence still needs the existing explicit authorization.

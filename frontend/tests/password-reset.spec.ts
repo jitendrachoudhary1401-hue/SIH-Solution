@@ -4,7 +4,7 @@ test('email link resets a password, revokes sessions and preserves an empty work
   const email = 'browser-password-reset@example.com';
   const original = 'OriginalPassphrase!2026';
   const replacement = 'ReplacementPassphrase!2026';
-  expect((await page.request.post('/api/auth/register', {data: {name: 'Password Recovery User', email, account_type: 'student', password: original, confirm_password: original}})).status()).toBe(201);
+  expect((await page.request.post('/api/auth/register', {data: {name: 'Password Recovery User', email, account_type: 'student', faculty_name:'Dr. Test Faculty', admission_year:2026, passout_year:2030, password: original, confirm_password: original}})).status()).toBe(201);
   expect((await page.request.post('/api/auth/login', {data: {email, password: original}})).status()).toBe(200);
   const oldSession = (await page.context().cookies()).find(cookie => cookie.name === 'onecase_session')!.value;
   await page.context().clearCookies();

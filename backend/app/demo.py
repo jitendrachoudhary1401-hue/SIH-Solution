@@ -1,9 +1,10 @@
 """Public demo identities are opt-in and confined to a synthetic bureau."""
 import secrets
+from datetime import timedelta, timezone
 from flask import Blueprint, abort, current_app
 from pydantic import Field
 from sqlalchemy import select
-from .models import db, User, Bureau, Institution
+from .models import db, User, Bureau, Institution, RoleAssignment, now
 from .api import Input, parse, hasher, sign_in_response
 
 demo_api = Blueprint("demo", __name__)
@@ -39,6 +40,19 @@ def seed_public_demo_accounts():
                             bureau_id=bureau.id if role in {"officer", "lead"} else None))
         created += 1
     db.session.commit()
+    faculty = db.session.scalar(select(User).where(User.email == 'demo.faculty@onecase.demo', User.is_demo.is_(True)))
+    if faculty:
+        approved = db.session.scalar(select(RoleAssignment).where(RoleAssignment.user_id == faculty.id, RoleAssignment.role == 'faculty_reviewer', RoleAssignment.revoked_at.is_(None)))
+        if not approved:
+            db.session.add(RoleAssignment(user_id=faculty.id, role='faculty_reviewer', expires_at=now()+timedelta(days=90),
+                           approval_reference='SYNTHETIC-DEMO-FACULTY', reason='Approved faculty reviewer for the isolated demonstration college.'))
+        elif approved.expires_at and approved.expires_at.replace(tzinfo=timezone.utc) <= now():
+            approved.expires_at = now()+timedelta(days=90)
+        for role in ('student', 'parent'):
+            user = db.session.scalar(select(User).where(User.email == f'demo.{role}@onecase.demo', User.is_demo.is_(True)))
+            if user:
+                user.faculty_name, user.admission_year, user.passout_year = faculty.name, 2026, 2030
+        db.session.commit()
     return created
 
 

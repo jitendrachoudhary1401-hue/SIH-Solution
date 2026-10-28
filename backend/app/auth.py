@@ -109,14 +109,21 @@ def workflow_scope(user):
 
 def workflow_member(case, user=None):
     user = user or g.user
-    return user.role not in PUBLIC_ROLES and bool(db.session.scalar(select(Complaint.id).where(
+    return (user.role not in PUBLIC_ROLES or user.role == 'faculty' and 'faculty_reviewer' in roles(user)) and bool(db.session.scalar(select(Complaint.id).where(
         Complaint.id == case.id, Complaint.id.in_(workflow_scope(user)), scope(user))))
 
 
 def scope(user=None, aggregate=False):
     user = user or g.user
     if user.role in PUBLIC_ROLES:
-        return Complaint.submitter_user_id == user.id
+        owned = Complaint.submitter_user_id == user.id
+        if user.role == 'faculty' and 'faculty_reviewer' in roles(user):
+            conflict = select(CaseConflict.complaint_id).where(CaseConflict.user_id == user.id, CaseConflict.resolved_at.is_(None))
+            appointed = and_(Complaint.id.in_(workflow_scope(user)), Complaint.id.not_in(conflict))
+            if user.is_demo:
+                appointed = and_(appointed, Complaint.bureau_id.in_(select(Bureau.id).where(Bureau.code == 'PUBLIC-DEMO')))
+            return or_(owned, appointed)
+        return owned
     if "admin" in roles(user):
         return Complaint.id > 0
     effective = roles(user)
@@ -145,7 +152,7 @@ def has_permission(case, operation, user=None):
 def has_content(case, user=None):
     user = user or g.user
     if user.role in PUBLIC_ROLES:
-        return case.submitter_user_id == user.id
+        return case.submitter_user_id == user.id or workflow_member(case, user)
     if "admin" in roles(user):
         return True
     if roles(user) & {"officer", "lead"} and case.bureau_id == user.bureau_id:
@@ -210,7 +217,7 @@ def proceeding_allowed(proceeding, operation="read", user=None):
 def document_allowed(case, attachment, user=None):
     user = user or g.user
     if user.role in PUBLIC_ROLES:
-        return case.submitter_user_id == user.id
+        return case.submitter_user_id == user.id or workflow_member(case, user) and attachment.sensitivity == 'standard'
     if "admin" in roles(user):
         return True
     if workflow_member(case, user) and attachment.sensitivity == "standard":

@@ -4,7 +4,7 @@ from flask import Blueprint, abort, g
 from pydantic import Field
 from sqlalchemy import select
 from .models import db, now, iso, User, Complaint, CaseWorkflow, CaseWorkflowReport, CaseConflict, Attachment
-from .auth import authenticated, roles, PUBLIC_ROLES, ROLES, case_or_404, check_version, document_allowed, has_content
+from .auth import authenticated, roles, PUBLIC_ROLES, ROLES, case_or_404, check_version, document_allowed, has_content, workflow_member
 from .api import Input, parse, event, notify
 from .documents import evidence_available
 
@@ -53,13 +53,25 @@ def start(case):
                         officer_id=case.owner_id, access_until=now() + timedelta(days=90),
                         auditor_required=case.category in ('Fee refund', 'Infrastructure'), public_decision='')
     db.session.add(flow)
-    case.next_action = 'Appoint a faculty / grievance reviewer for initial review'
+    if case.owner.is_demo:
+        faculty = db.session.scalar(select(User).where(User.email == 'demo.faculty@onecase.demo', User.is_demo.is_(True)))
+        if faculty and eligible(case, 'faculty_reviewer', faculty.id):
+            flow.faculty_reviewer_id = faculty.id
+            notify(faculty.id, case, 'workflow', f'{case.reference}: A demo-college complaint awaits your initial report.', f'demo-faculty:{case.id}:{faculty.id}')
+        for role in SLOTS:
+            if role == 'officer' or getattr(flow, role + '_id'):
+                continue
+            person = db.session.scalar(select(User).where(User.email == f'demo.{role}@onecase.demo', User.is_demo.is_(True)))
+            if person and eligible(case, role, person.id):
+                setattr(flow, role + '_id', person.id)
+    case.next_action = 'Initial faculty / grievance report required' if flow.faculty_reviewer_id else 'Appoint a faculty / grievance reviewer for initial review'
     return flow
 
 
 def eligible(case, role, user_id):
     user = db.session.get(User, user_id) if user_id else None
-    return bool(user and user.active and user.role in ROLES and (role in roles(user) or role == 'officer' and 'lead' in roles(user))
+    return bool(user and user.active and (user.role in ROLES or user.role == 'faculty' and role == 'faculty_reviewer' and 'faculty_reviewer' in roles(user))
+                and (role in roles(user) or role == 'officer' and 'lead' in roles(user))
                 and user.id != case.submitter_user_id and user.is_demo == bool(case.owner.is_demo)
                 and (role not in ('officer', 'lead') or user.bureau_id)
                 and not db.session.scalar(select(CaseConflict.id).where(CaseConflict.complaint_id == case.id,
@@ -111,7 +123,7 @@ def announce(case, flow):
 def serialize(case, flow):
     if not flow:
         return {'managed': False}
-    public = g.user.role in PUBLIC_ROLES or not has_content(case)
+    public = (g.user.role in PUBLIC_ROLES and not workflow_member(case)) or not has_content(case)
     stage_reports = reports(flow)
     return {'managed': True, 'stage': flow.stage, 'stage_label': LABELS[flow.stage], 'cycle': flow.cycle,
             'version': flow.version, 'steps': [{'stage': s, 'label': LABELS[s]} for s in ORDER],

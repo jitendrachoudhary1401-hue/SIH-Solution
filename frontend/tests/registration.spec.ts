@@ -5,6 +5,11 @@ async function fillRegistration(page: Page, email: string) {
   await page.getByLabel('Email address', {exact: true}).fill(email);
   await page.getByLabel('Password', {exact: true}).fill('PersonalPassphrase!2026');
   await page.getByLabel('Confirm password', {exact: true}).fill('PersonalPassphrase!2026');
+  if (await page.getByLabel('Faculty contact name', {exact:true}).isVisible()) {
+    await page.getByLabel('Faculty contact name', {exact:true}).fill('Dr. Test Faculty');
+    await page.getByLabel('Year of admission', {exact:true}).fill('2026');
+    await page.getByLabel('Pass-out year (actual or expected)', {exact:true}).fill('2030');
+  }
 }
 
 test('student and parent registration saves real accounts with empty workspaces', async ({ page }) => {

@@ -1,7 +1,7 @@
 import { useContext, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, post, date, label, type Case } from '../lib/api';
-import { Auth, ErrorBox, Field, FormError, Loading, useData, useSave } from '../components/ui';
+import { Auth, ErrorBox, Field, FormError, Loading, useSave } from '../components/ui';
 
 const stages = [
   ['initial_review', 'Faculty / grievance review', 'An appointed reviewer records a recommendation. Every complaint continues to the officer, including disputed or reportedly resolved cases.'],
@@ -35,10 +35,11 @@ type Candidate = {id: number; name: string; roles: string[]};
 
 export default function HandlingWorkflow({c}: {c: Case}) {
   const {user} = useContext(Auth);
-  const query = useData<Flow>(`/complaints/${c.id}/case-workflow`);
+  const query = useQuery({queryKey:[`/complaints/${c.id}/case-workflow`],
+    queryFn:({signal}) => api<Flow>(`/complaints/${c.id}/case-workflow`,{signal})});
   const flow = query.data;
   const choices = useQuery({queryKey: ['handling-team', c.id, flow?.version], enabled: !!flow?.can_manage,
-    queryFn: () => api<{items: Candidate[]}>(`/complaints/${c.id}/case-workflow/candidates`)});
+    queryFn: ({signal}) => api<{items: Candidate[]}>(`/complaints/${c.id}/case-workflow/candidates`,{signal})});
   const save = useSave(({action, values}: {action: string; values: Record<string, unknown>}) => post(`/complaints/${c.id}/case-workflow/${action}`, values));
   function submitReport(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = new FormData(e.currentTarget);

@@ -7,7 +7,7 @@ from app.api import hasher
 
 def payload(kind="student", email="new.account@example.com"):
     return {"name": "New Account", "email": email, "password": "PersonalPassphrase!2026",
-            "confirm_password": "PersonalPassphrase!2026", "account_type": kind, "organization": "Example institution"}
+            "confirm_password": "PersonalPassphrase!2026", "account_type": kind, "organization": "Example institution", "faculty_name": "Dr. Example Faculty", "admission_year": 2026, "passout_year": 2030}
 
 
 @pytest.mark.parametrize("kind", ["student", "parent", "faculty", "staff", "other"])

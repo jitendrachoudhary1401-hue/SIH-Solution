@@ -1,8 +1,8 @@
-export type User = { id: number; name: string; email: string; role: string; is_demo: boolean; mfa_enrollment_required?: boolean; requested_role: string | null; organization: string; approval_pending: boolean; bureau_id: number | null; bureau: string; roles: string[]; capabilities: Record<string, boolean> };
+export type User = { id: number; name: string; email: string; role: string; is_demo: boolean; mfa_enrollment_required?: boolean; requested_role: string | null; organization: string; faculty_name?: string; admission_year?: number | null; passout_year?: number | null; approval_pending: boolean; bureau_id: number | null; bureau: string; roles: string[]; capabilities: Record<string, boolean> };
 export type Institution = { id: number; name: string; external_id: string | null; verified: boolean; region: string; address: string };
 export type Case = {
   id: number; reference: string; institution: Institution; category: string; description?: string;
-  priority: string; status: string; handling_stage?: string | null; bureau: string; bureau_id: number; owner: string; owner_id: number;
+  priority: string; status: string; handling_stage?: string | null; is_submitter?: boolean; bureau: string; bureau_id: number; owner: string; owner_id: number;
   received_at: string; due_at: string | null; deadline_condition: string; deadline_policy: string;
   next_action: string; version: number; content_revision: number; matching_state: string; matching_error: string | null;
   paused_at: string | null; deadline_config: Record<string, unknown>; pauses?: {id: number; started_at: string; ended_at: string | null; reason: string}[];

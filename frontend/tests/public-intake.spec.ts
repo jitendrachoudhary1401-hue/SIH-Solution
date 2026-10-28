@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('stakeholder submits proof, follows actions and downloads the frozen watermarked PDF', async ({ page, browser }) => {
   await page.setViewportSize({width: 390, height: 900});
   const email = `intake-${Date.now()}@example.com`;
-  const register = await page.request.post('/api/auth/register', {data: {name: 'Browser Complainant', email, password: 'PersonalPassphrase!2026', confirm_password: 'PersonalPassphrase!2026', account_type: 'student'}});
+  const register = await page.request.post('/api/auth/register', {data: {name: 'Browser Complainant', email, password: 'PersonalPassphrase!2026', confirm_password: 'PersonalPassphrase!2026', account_type: 'student', faculty_name:'Dr. Test Faculty', admission_year:2026, passout_year:2030}});
   expect(register.status()).toBe(201);
   await page.goto('/officer/login');
   await page.getByLabel('Email address').fill(email);

@@ -47,7 +47,7 @@ def test_main_asgi_adapter_serves_health_and_persists_registration(app, monkeypa
         status, health = await request("/api/health")
         assert status == 200 and health["status"] == "ok"
         status, result = await request("/api/auth/register", "POST", {
-            "name": "ASGI Account", "email": "asgi-student@example.com", "account_type": "student",
+            "name": "ASGI Account", "email": "asgi-student@example.com", "account_type": "student", "faculty_name": "Dr. Test Faculty", "admission_year": 2026, "passout_year": 2030,
             "password": "ASGIPassphrase!2026", "confirm_password": "ASGIPassphrase!2026"})
         assert status == 201 and result["approval_pending"] is False
         status, identity = await request("/api/auth/login", "POST", {
