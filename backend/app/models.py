@@ -121,6 +121,40 @@ class Complaint(db.Model):
     )
 
 
+class CaseWorkflow(db.Model):
+    """Case-bound internal handling, separate from external legal proceedings."""
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), primary_key=True)
+    stage = db.Column(db.String(30), nullable=False, default="initial_review")
+    cycle = db.Column(db.Integer, nullable=False, default=1)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    faculty_reviewer_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    officer_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    lead_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    committee_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    reviewer_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    verifier_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    auditor_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    executive_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    access_until = db.Column(db.DateTime(timezone=True), nullable=False)
+    auditor_required = db.Column(db.Boolean, nullable=False, default=False)
+    outcome = db.Column(db.String(30))
+    public_decision = db.Column(db.Text, nullable=False, default="")
+    __mapper_args__ = {"version_id_col": version}
+    __table_args__ = (CheckConstraint("stage IN ('initial_review','officer_triage','committee_review','investigation','executive_decision','resolved','appeal_review')"),)
+
+
+class CaseWorkflowReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey("case_workflow.complaint_id"), nullable=False, index=True)
+    cycle = db.Column(db.Integer, nullable=False)
+    stage = db.Column(db.String(30), nullable=False)
+    role = db.Column(db.String(30), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    report = db.Column(db.Text, nullable=False)
+    evidence_ids = db.Column(db.JSON, nullable=False, default=list)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
 class Grant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

@@ -41,7 +41,7 @@ def test_public_registration_persists_and_starts_empty(app, client, kind):
     assert client.get("/api/account/summary").json["total"] == 0
 
 
-@pytest.mark.parametrize("kind", ["officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor"])
+@pytest.mark.parametrize("kind", ["faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor"])
 def test_staff_signup_does_not_grant_requested_privilege(app, client, kind):
     assert client.post("/api/auth/register", json=payload(kind)).status_code == 201
     auth = client.post("/api/auth/login", json={"email": "new.account@example.com", "password": "PersonalPassphrase!2026"})

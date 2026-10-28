@@ -7,7 +7,7 @@ from .models import db, User, Bureau, Institution
 from .api import Input, parse, hasher, sign_in_response
 
 demo_api = Blueprint("demo", __name__)
-DEMO_ROLES = ("student", "parent", "faculty", "staff", "other", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor")
+DEMO_ROLES = ("student", "parent", "faculty", "staff", "other", "faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor")
 INSTITUTION_ID = "ONECASE-PUBLIC-DEMO"
 
 

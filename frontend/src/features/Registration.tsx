@@ -5,8 +5,8 @@ import { ArrowRight, CheckCheck, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { post } from '../lib/api';
 import { Field, FormError } from '../components/ui';
 
-const otherTypes = [['faculty', 'Faculty'], ['staff', 'Institution staff'], ['other', 'Other user'], ['officer', 'Bureau officer'], ['lead', 'Bureau lead'], ['reviewer', 'Overlap reviewer'], ['committee', 'Committee member'], ['verifier', 'Independent verifier'], ['executive', 'Executive'], ['auditor', 'Auditor']];
-const staffTypes = new Set(['officer', 'lead', 'reviewer', 'committee', 'verifier', 'executive', 'auditor']);
+const otherTypes = [['faculty_reviewer', 'Faculty / grievance reviewer (approval required)'], ['faculty', 'Faculty'], ['staff', 'Institution staff'], ['other', 'Other user'], ['officer', 'Bureau officer'], ['lead', 'Bureau lead'], ['reviewer', 'Overlap reviewer'], ['committee', 'Committee member'], ['verifier', 'Independent verifier'], ['executive', 'Executive'], ['auditor', 'Auditor']];
+const staffTypes = new Set(['faculty_reviewer', 'officer', 'lead', 'reviewer', 'committee', 'verifier', 'executive', 'auditor']);
 
 export default function Registration({ audience }: { audience: 'family' | 'other' }) {
   const [accountType, setAccountType] = useState(audience === 'family' ? 'student' : 'faculty');

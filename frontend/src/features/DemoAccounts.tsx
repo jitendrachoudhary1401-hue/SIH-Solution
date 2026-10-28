@@ -6,6 +6,7 @@ import { Loading, ErrorBox } from '../components/ui';
 
 type Identity = {user: User; csrf: string};
 const descriptions: Record<string, string> = {
+  faculty_reviewer: 'Review an appointed complaint and send a report to its officer',
   student: 'A personal student workspace', parent: 'Follow records shared with a parent', faculty: 'A faculty member’s personal workspace',
   staff: 'An institution staff workspace', other: 'A community member’s workspace', officer: 'Receive and coordinate demo cases',
   lead: 'Manage a demonstration bureau', reviewer: 'Review potential case relationships', committee: 'Access appointed proceedings',

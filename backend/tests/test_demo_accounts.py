@@ -8,7 +8,7 @@ def test_demo_accounts_are_persistent_idempotent_and_start_empty(app, client):
     with app.app_context():
         before = db.session.scalar(select(func.count()).select_from(Complaint))
         admin_count = db.session.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
-        assert seed_public_demo_accounts() == 12
+        assert seed_public_demo_accounts() == len(DEMO_ROLES)
         assert seed_public_demo_accounts() == 0
         assert db.session.scalar(select(func.count()).select_from(Complaint)) == before
         assert db.session.scalar(select(func.count()).select_from(User).where(User.role == "admin")) == admin_count

@@ -114,6 +114,8 @@ def create_app(config=None):
     app.register_blueprint(demo_api, url_prefix="/api")
     app.register_blueprint(intake_api, url_prefix="/api")
     app.register_blueprint(report_api, url_prefix="/api")
+    from .case_flow import case_flow_api
+    app.register_blueprint(case_flow_api, url_prefix="/api")
     register(app)
 
     @app.before_request

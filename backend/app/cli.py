@@ -121,7 +121,7 @@ def register(app):
     @app.cli.command("create-user")
     @click.option("--email", required=True)
     @click.option("--name", required=True)
-    @click.option("--role", type=click.Choice(["officer", "lead", "reviewer", "auditor", "executive", "admin"]), required=True)
+    @click.option("--role", type=click.Choice(["faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "auditor", "executive", "admin"]), required=True)
     @click.option("--bureau", type=int)
     @click.password_option()
     def create_user(email, name, role, bureau, password):

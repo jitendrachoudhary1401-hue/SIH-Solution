@@ -118,6 +118,8 @@ def submit():
     db.session.add(case)
     db.session.flush()
     db.session.add(Assignment(complaint_id=case.id, bureau_id=owner.bureau_id, owner_id=owner.id, reason='Public portal intake'))
+    from .case_flow import start
+    start(case)
     db.session.add(Idempotency(user_id=g.user.id, key=key, digest=fingerprint, complaint_id=case.id))
     event(case, 'registered', 'Complaint registered', data.issue_summary,
           {'submitter': g.user.name, 'assigned_to': owner.name, 'source': data.source_channel})

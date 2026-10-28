@@ -386,6 +386,37 @@ tbody tr:hover { background: #fcf7ef; }
 .password-input button { position: absolute; right: 7px; top: 7px; border: 0; background: transparent; color: #aa8a63; width: 34px; height: 34px; display: grid; place-items: center; }
 .login-foot { display: flex; gap: 9px; align-items: center; justify-content: center; font-size: 13px; color: #a28560; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e6d7c3; }
 .login-bottom { grid-column: 2; margin-top: 30px; text-align: right; font-size: 14px; color: #9b784f; }
+.login-workflow { grid-column: 1 / -1; grid-row: 5; display: grid; grid-template-columns: 1.1fr 1fr; column-gap: 50px; width: 100%; margin-top: 64px; padding-top: 38px; border-top: 2px solid #a35436; }
+.login-workflow>.eyebrow,.login-workflow>h2,.login-workflow>.journey-intro { grid-column: 1 / -1; }
+.login-workflow h2 { font-size: clamp(27px, 3vw, 40px); color: #633f28; margin: 12px 0; }
+.journey-intro { max-width: 850px; line-height: 1.8; color: #80664d; }
+.handling-panel { padding: 28px; margin: 24px 0; border-top: 3px solid var(--primary); }
+.handling-timeline { list-style: none; padding: 0; margin: 25px 0; }
+.handling-timeline>li { display: flex; gap: 18px; position: relative; padding: 0 0 27px; min-width: 0; }
+.handling-timeline>li:not(:last-child):before { content: ''; position: absolute; left: 17px; top: 35px; bottom: 0; width: 2px; background: #d9c4a9; }
+.handling-marker { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border: 1px solid #bda17d; background: #fffdf8; color: #8a6343; font-size: 13px; z-index: 1; }
+.handling-timeline h3 { font-size: 17px; margin: 3px 0 7px; }
+.handling-timeline p { line-height: 1.7; font-size: 14px; color: #80664d; }
+.handling-timeline small { display: block; margin-top: 7px; color: #80664d; }
+.handling-timeline .current .handling-marker { background: #9c482e; border-color: #9c482e; color: #fffdf8; }
+.handling-timeline .current h3 { color: #9c482e; }
+.handling-timeline .complete .handling-marker { background: #eadbc5; color: #48321f; }
+.public-timeline { grid-column: 1; margin: 34px 0; }
+.journey-solution { grid-column: 2; grid-row: 4; align-self: start; margin-top: 34px; padding: 24px; border: 1px solid #d9c4a9; background: #fffdf8; }
+.journey-solution>h3 { font-size: 22px; margin-bottom: 20px; }
+.journey-solution dl { display: grid; grid-template-columns: minmax(0,1fr); gap: 24px; margin-bottom: 20px; }
+.journey-solution dt { font-weight: 600; margin-bottom: 7px; }
+.journey-solution dd { margin: 0; line-height: 1.7; color: #80664d; }
+.handling-team { margin-top: 20px; padding: 18px 0; border-top: 1px solid var(--border); }
+.handling-team summary { cursor: pointer; font-weight: 600; margin-bottom: 15px; }
+.handling-team form,.handling-report { display: flex; flex-direction: column; gap: 16px; margin-top: 22px; }
+.handling-team article { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.handling-team article h3 { font-size: 16px; margin-bottom: 8px; }
+.handling-report fieldset { border: 1px solid var(--border); padding: 14px; }
+.check-field { display: flex; gap: 10px; align-items: flex-start; line-height: 1.6; }
+.check-field input { width: auto; flex-shrink: 0; margin-top: 5px; }
+@media(max-width:1100px) { .login-workflow { order: 3; max-width: 850px; margin-top: 38px; } }
+@media(max-width:600px) { .login-workflow { grid-template-columns: minmax(0,1fr); } .journey-solution { grid-column: 1; grid-row: auto; margin-top: 0; } .handling-panel { padding: 20px 16px; } .handling-panel>.card-heading { flex-wrap: wrap; } .handling-report .button-row { flex-direction: column; } }
 .demo-login { grid-column: 2; max-width: 490px; margin-left: auto; text-align: right; margin-top: 16px; color: #a08766; font-size: 12px; line-height: 1.9; }
 .demo-login code { color: #89603c; font-size: 12px; }
 .case-journey { display: grid; grid-template-columns: repeat(3,1fr); margin-bottom: 27px; background: #f2e7d8; border: 1px solid #dcc5a7; }

@@ -12,7 +12,7 @@ for (const width of [320, 390, 768, 820, 1024]) {
     await page.getByRole('button', {name: 'Demo accounts', exact: true}).click();
     const dialog = page.getByRole('region', {name: 'Demo account options'});
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator('.demo-role')).toHaveCount(12);
+    await expect(dialog.locator('.demo-role')).toHaveCount(13);
     await expect(dialog.getByRole('button', {name: 'Try Admin demo'})).toHaveCount(0);
     const bounds = await dialog.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
@@ -44,7 +44,7 @@ test('registration and recovery fit phone and tablet widths', async ({page}) => 
 });
 
 test('every demo role can sign in directly from the login page', async ({page}) => {
-  const roles = ['Student', 'Parent', 'Faculty', 'Staff', 'Other', 'Officer', 'Lead', 'Reviewer', 'Committee', 'Verifier', 'Executive', 'Auditor'];
+  const roles = ['Student', 'Parent', 'Faculty', 'Staff', 'Other', 'Faculty Reviewer', 'Officer', 'Lead', 'Reviewer', 'Committee', 'Verifier', 'Executive', 'Auditor'];
   for (const role of roles) {
     await page.context().clearCookies();
     await page.goto('/officer/login');
@@ -52,7 +52,7 @@ test('every demo role can sign in directly from the login page', async ({page}) 
     await page.getByRole('button', {name: `Try ${role} demo`, exact: true}).click();
     await expect(page.locator('.main-content h1')).toBeVisible();
     const identity = await (await page.request.get('/api/auth/me')).json();
-    expect(identity.user.role).toBe(role.toLowerCase());
+    expect(identity.user.role).toBe(role.toLowerCase().replaceAll(' ', '_'));
     expect(identity.user.is_demo).toBe(true);
   }
 });

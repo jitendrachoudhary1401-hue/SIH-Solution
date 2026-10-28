@@ -2,7 +2,7 @@ export type User = { id: number; name: string; email: string; role: string; is_d
 export type Institution = { id: number; name: string; external_id: string | null; verified: boolean; region: string; address: string };
 export type Case = {
   id: number; reference: string; institution: Institution; category: string; description?: string;
-  priority: string; status: string; bureau: string; bureau_id: number; owner: string; owner_id: number;
+  priority: string; status: string; handling_stage?: string | null; bureau: string; bureau_id: number; owner: string; owner_id: number;
   received_at: string; due_at: string | null; deadline_condition: string; deadline_policy: string;
   next_action: string; version: number; content_revision: number; matching_state: string; matching_error: string | null;
   paused_at: string | null; deadline_config: Record<string, unknown>; pauses?: {id: number; started_at: string; ended_at: string | null; reason: string}[];

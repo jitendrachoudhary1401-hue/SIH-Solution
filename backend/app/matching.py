@@ -74,7 +74,8 @@ def get_models():
 def process(case_id, revision, models=None):
     import numpy as np
     from .api import notify
-    from .models import Grant, User
+    from .models import User
+    from .auth import roles, scope, has_content
     started = time.perf_counter()
     case = db.session.get(Complaint, case_id)
     if not case or case.content_revision != revision:
@@ -162,10 +163,20 @@ def process(case_id, revision, models=None):
         db.session.flush()
         db.session.add(PairScore(pair_id=pair.id, run_id=run.id, evidence=evidence))
         if band != "low":
-            for reviewer in db.session.scalars(select(User).where(User.role == "reviewer", User.active.is_(True))):
-                granted = set(db.session.scalars(select(Grant.complaint_id).where(Grant.user_id == reviewer.id, Grant.complaint_id.in_([a, b]))))
-                if granted == {a, b}:
-                    notify(reviewer.id, case, "overlap", "A possible overlap is ready for review.", f"pair:{pair.id}:{revision}:{reviewer.id}")
+            revision_key = f'{revisions[a]}:{revisions[b]}'
+            for reviewer in db.session.scalars(select(User).where(User.active.is_(True))):
+                if 'reviewer' not in roles(reviewer):
+                    continue
+                visible = set(db.session.scalars(select(Complaint.id).where(Complaint.id.in_([a, b]), scope(reviewer))))
+                if visible == {a, b} and has_content(pair.a, reviewer) and has_content(pair.b, reviewer):
+                    notify(reviewer.id, case, "overlap", "A possible overlap is ready for review.", f"pair:{pair.id}:{revision_key}:{reviewer.id}")
+            for own_case in (case, other):
+                owner = db.session.get(User, own_case.owner_id)
+                if owner and owner.active and roles(owner) & {'officer', 'lead'} and db.session.scalar(
+                        select(Complaint.id).where(Complaint.id == own_case.id, scope(owner))):
+                    # The alert links only to the recipient's own case. Cross-case content stays scoped.
+                    notify(owner.id, own_case, "overlap", f"{own_case.reference}: A possible overlap needs coordination. An authorized reviewer must assess the related complaints.",
+                           f"pair-owner:{pair.id}:{revision_key}:{own_case.id}:{owner.id}")
     case.matching_state, case.matching_error = "completed", None
     db.session.commit()
     return "completed"

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { date, label, type Case, type Event, type Page } from '../lib/api';
 import { Badge, ErrorBox, Heading, Loading, useData } from '../components/ui';
+import HandlingWorkflow from './ComplaintJourney';
 
 export function ClosureReports({ c }: { c: Case }) {
   return c.reports?.length ? <section className="card intake-card"><h2>Closure reports</h2><p className="muted">Watermarked PDF snapshots, preserved separately for each closure.</p>{c.reports.map(r => <p key={r.id}><a className="button secondary" href={`/api/complaints/${c.id}/reports/${r.id}.pdf`}>Download closure PDF - {date(r.created_at, true)} IST</a></p>)}</section> : null;
@@ -16,5 +17,5 @@ export function ComplaintTimeline({ id }: { id: number }) {
 }
 
 export default function ComplaintRecord({ c, evidence }: { c: Case; evidence: ReactNode }) {
-  return <><Link className="back-link" to="/account">Back to my dashboard</Link><Heading eyebrow="YOUR COMPLAINT" title={c.reference} description={c.institution.name} /><Badge value={c.status} /><section className="card intake-card"><h2>{c.issue_summary || c.category}</h2><p className="description-text">{c.description}</p><dl className="detail-grid"><div><dt>Action taker</dt><dd>{c.owner}</dd></div><div><dt>Registered</dt><dd>{date(c.received_at, true)} IST</dd></div><div><dt>Next action</dt><dd>{c.next_action}</dd></div><div><dt>Category / source</dt><dd>{c.category} / {c.source_channel}</dd></div></dl></section><ClosureReports c={c} /><ComplaintTimeline id={c.id} /><section className="card intake-card">{evidence}</section></>;
+  return <><Link className="back-link" to="/account">Back to my dashboard</Link><Heading eyebrow="YOUR COMPLAINT" title={c.reference} description={c.institution.name} /><Badge value={c.status} /><section className="card intake-card"><h2>{c.issue_summary || c.category}</h2><p className="description-text">{c.description}</p><dl className="detail-grid"><div><dt>Action taker</dt><dd>{c.owner}</dd></div><div><dt>Registered</dt><dd>{date(c.received_at, true)} IST</dd></div><div><dt>Next action</dt><dd>{c.next_action}</dd></div><div><dt>Category / source</dt><dd>{c.category} / {c.source_channel}</dd></div></dl></section><HandlingWorkflow c={c} /><ClosureReports c={c} /><ComplaintTimeline id={c.id} /><section className="card intake-card">{evidence}</section></>;
 }

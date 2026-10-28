@@ -113,12 +113,18 @@ def test_uploads_video_privacy_scanning_and_retry(app, client, tmp_path):
         validate_file(path, 'video/mp4')
 
 
-def test_closure_pdf_watermark_frozen_history_and_authorization(app, client):
+def test_legacy_closure_pdf_watermark_frozen_history_and_authorization(app, client):
     with app.app_context():
         app.config['PUBLIC_INTAKE_OWNER_ID'] = db.session.scalar(select(User.id).where(User.email == 'officer.rb@onecase.demo'))
     headers = public_login(client)
     case = client.post('/api/intake/complaints', json=details(), headers=headers).json
     proof_id = approved_test_evidence(app, case['id'])
+    # Preserve coverage for the pre-existing status API on legacy, unmanaged cases.
+    # New portal complaints follow the executive-gated path tested in test_case_flow.py.
+    from app.models import CaseWorkflow
+    with app.app_context():
+        db.session.delete(db.session.get(CaseWorkflow, case['id']))
+        db.session.commit()
     actor = app.test_client(); auth = login(actor)
     current = actor.get(f"/api/complaints/{case['id']}").json
     recorded = actor.post(f"/api/complaints/{case['id']}/actions", headers=auth, json={'version': current['version'], 'reason': 'Reviewed the refund payment proof', 'evidence_ids': [proof_id]})

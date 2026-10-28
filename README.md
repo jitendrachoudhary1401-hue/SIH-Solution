@@ -19,10 +19,11 @@ The website uses a warm ivory and terracotta theme, readable text and sharp cont
 | Area | Current behaviour |
 | --- | --- |
 | Public intake | Registration for students, parents, faculty, staff and other stakeholders; complaint source, institution, proof uploads and a personal timeline. Staff registrations request approval before receiving staff access. |
+| Handling timeline | Initial faculty/grievance report, officer triage, lead and committee assessments, independent investigation, conditional auditor review, executive outcome and complainant appeal. Initial recommendations cannot dismiss cases. See [handling workflow and setup](docs/COMPLAINT_HANDLING_WORKFLOW.md). |
 | Case coordination | Accountable owner, next action, original receipt date, recorded transfers and recipient acknowledgement. Authorized status changes support disposal and reopening. |
 | Proceedings | Authority and route records, expiring appointments, notices/orders, milestone revisions, case packets, actual dispatch and acknowledgement records. |
 | Compliance and closure | Evidence submission and independent verification are separate. Disposal requires outcome evidence and a communication record; a closure PDF freezes the recorded outcome. |
-| Semantic overlap review | Local MiniLM embeddings retrieve candidates within the same verified institution; a cross-encoder reranks them. A reviewer records the relationship decision. Original complaints remain separate. |
+| Semantic overlap review | Local MiniLM embeddings retrieve candidates within the same verified institution; a cross-encoder reranks them. Assigned officers receive private alerts for their own case; a reviewer with access to both records the relationship decision. Original complaints remain separate. |
 | Monitoring and reports | Scoped dashboard totals, ageing/overdue views, deadline and milestone reminders, notifications, action history and authorized CSV exports. |
 | Administration | Staff approval, scoped permissions, role/appointment expiry, conflicts/recusals and manual institution verification with a recorded approval source. |
 | Account security | Argon2 password hashing, opaque hashed sessions, CSRF checks, privileged MFA enrollment, recovery codes, recent-authentication gates and SendGrid password recovery. |

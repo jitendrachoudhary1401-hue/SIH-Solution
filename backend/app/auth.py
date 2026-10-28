@@ -7,9 +7,9 @@ from sqlalchemy import and_, or_, select
 from .models import (db, Complaint, Grant, Session, now, RoleAssignment, PermissionGrant,
                      Appointment, Proceeding, CaseConflict, Bureau)
 
-ROLES = {"officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
+ROLES = {"faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
 PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
-MFA_ROLES = {"lead", "reviewer", "committee", "verifier", "admin"}
+MFA_ROLES = {"faculty_reviewer", "lead", "reviewer", "committee", "verifier", "executive", "admin"}
 OPERATIONS = {"case.read", "case.transition", "case.transfer", "case.route", "case.packet", "documents.read",
               "case.export", "audit.read", "monitor.aggregate", "case.proceeding", "case.compliance"}
 
@@ -100,6 +100,19 @@ def active_appointments(user=None):
     return select(Appointment).where(Appointment.user_id == user.id, Appointment.valid_from <= now(), Appointment.expires_at > now(), Appointment.recused_at.is_(None))
 
 
+def workflow_scope(user):
+    from .models import CaseWorkflow
+    fields = [getattr(CaseWorkflow, role + "_id") == user.id for role in roles(user)
+              if role in {"faculty_reviewer", "officer", "lead", "committee", "reviewer", "verifier", "auditor", "executive"}]
+    return select(CaseWorkflow.complaint_id).where(CaseWorkflow.access_until > now(), or_(*fields) if fields else db.false())
+
+
+def workflow_member(case, user=None):
+    user = user or g.user
+    return user.role not in PUBLIC_ROLES and bool(db.session.scalar(select(Complaint.id).where(
+        Complaint.id == case.id, Complaint.id.in_(workflow_scope(user)), scope(user))))
+
+
 def scope(user=None, aggregate=False):
     user = user or g.user
     if user.role in PUBLIC_ROLES:
@@ -113,7 +126,7 @@ def scope(user=None, aggregate=False):
     if "lead" not in effective:
         bureau = and_(bureau, or_(Complaint.submitter_user_id.is_(None), Complaint.owner_id == user.id))
     conflict = select(CaseConflict.complaint_id).where(CaseConflict.user_id == user.id, CaseConflict.resolved_at.is_(None))
-    conditions = [bureau, Complaint.id.in_(grants), permission_scope("case.read", user)]
+    conditions = [bureau, Complaint.id.in_(grants), permission_scope("case.read", user), Complaint.id.in_(workflow_scope(user))]
     if "committee" in effective:
         conditions.append(Complaint.id.in_(proceedings))
     if aggregate and "executive" in effective:
@@ -136,6 +149,8 @@ def has_content(case, user=None):
     if "admin" in roles(user):
         return True
     if roles(user) & {"officer", "lead"} and case.bureau_id == user.bureau_id:
+        return True
+    if workflow_member(case, user):
         return True
     grant = db.session.scalar(select(Grant).where(Grant.user_id == user.id, Grant.complaint_id == case.id, live(Grant)))
     return bool(grant and "content" in grant.fields or has_permission(case, "case.read", user))
@@ -197,6 +212,8 @@ def document_allowed(case, attachment, user=None):
     if user.role in PUBLIC_ROLES:
         return case.submitter_user_id == user.id
     if "admin" in roles(user):
+        return True
+    if workflow_member(case, user) and attachment.sensitivity == "standard":
         return True
     if allowed(case, "documents.read", user):
         return attachment.sensitivity == "standard" or has_permission(case, "documents.read", user)

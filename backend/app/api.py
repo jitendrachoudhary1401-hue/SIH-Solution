@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from sqlalchemy import and_, func, or_, select
 from werkzeug.utils import secure_filename
 from .auth import (authenticated, case_or_404, check_version, digest, scope, roles, capabilities,
-                   allowed, has_content, document_allowed, proceeding_allowed, require_admin, requires_mfa_enrollment)
+                   allowed, has_content, document_allowed, proceeding_allowed, require_admin, requires_mfa_enrollment, workflow_member)
 from .models import (db, now, iso, User, Bureau, Institution, Complaint, Session, LoginAttempt,
                      Assignment, Transfer, ActionEvent, Notification, Attachment, Job,
                      Pair, Review, Idempotency, MatchingRun, SLAPause)
@@ -161,6 +161,8 @@ def condition(case):
 
 
 def case_json(case, detail=False):
+    from .models import CaseWorkflow
+    flow = db.session.get(CaseWorkflow, case.id)
     result = {"id": case.id, "reference": case.reference, "institution": institution_json(case.institution),
               "category": case.category, "priority": case.priority, "status": case.status,
               "bureau": case.bureau.code, "bureau_id": case.bureau_id, "owner": case.owner.name,
@@ -171,12 +173,13 @@ def case_json(case, detail=False):
               "matching_state": case.matching_state, "matching_error": case.matching_error}
     result.update(issue_summary=case.issue_summary, complainant_type=case.complainant_type,
                   source_channel=case.source_channel, source_reference=case.source_reference, entered_at=iso(case.entered_at))
+    result['handling_stage'] = flow.stage if flow else None
     if not has_content(case):
         result.update(issue_summary="", source_reference="", next_action="Details restricted to authorized case readers.")
     if detail:
         content = has_content(case)
         result["description"] = case.description if content else "Full complaint content is outside your appointment's field scope. Use the assigned proceeding records below."
-        result["can_transition"] = allowed(case, "case.transition")
+        result["can_transition"] = allowed(case, "case.transition") and flow is None
         result["allowed_transitions"] = TRANSITIONS[case.status] if result["can_transition"] else []
         result["can_edit"] = allowed(case, "case.edit")
         result["can_transfer"] = allowed(case, "case.transfer")
@@ -187,7 +190,7 @@ def case_json(case, detail=False):
         result["can_read_documents"] = allowed(case, "documents.read")
         result["has_content"] = content
         from .models import ComplaintReport
-        result['can_upload'] = case.status != 'disposed' and (case.submitter_user_id == g.user.id or allowed(case, 'case.edit'))
+        result['can_upload'] = case.status != 'disposed' and (case.submitter_user_id == g.user.id or allowed(case, 'case.edit') or workflow_member(case))
         result['max_upload_bytes'] = current_app.config['MAX_UPLOAD_BYTES']
         result['reports'] = [{'id': r.id, 'created_at': iso(r.created_at), 'checksum': r.checksum} for r in db.session.scalars(select(ComplaintReport).where(ComplaintReport.complaint_id == case.id).order_by(ComplaintReport.id.desc()))]
         if content:
@@ -620,6 +623,9 @@ def change_status(case_id):
     case = case_or_404(case_id, operation="case.transition")
     data = parse(StatusChange)
     check_version(case, data.version)
+    from .models import CaseWorkflow
+    if db.session.get(CaseWorkflow, case.id):
+        abort(409, description='Use the complaint handling timeline to advance, decide or appeal this case.')
     if data.status not in TRANSITIONS[case.status]:
         abort(422, description="This status transition is not permitted.")
     if data.status == "disposed":
@@ -675,6 +681,14 @@ def transfer(case_id):
     receipt = Transfer(complaint_id=case.id, from_owner_id=old_owner, to_owner_id=recipient.id, actor_id=g.user.id, reason=data.reason)
     db.session.add(receipt)
     case.owner_id, case.bureau_id = recipient.id, recipient.bureau_id
+    from .models import CaseWorkflow
+    flow = db.session.get(CaseWorkflow, case.id)
+    if flow:
+        from .case_flow import SLOTS
+        if recipient.id in [getattr(flow, r + '_id') for r in SLOTS if r != 'officer']:
+            abort(422, description='The accountable officer must be independent of the other handling roles.')
+        flow.officer_id = recipient.id
+        flow.version += 1
     db.session.flush()
     event(case, "transferred", f"Transferred from {old_bureau} to {recipient.bureau.code}", data.reason,
           {"owner_id": {"before": old_owner, "after": recipient.id}, 'assigned_from': old_name, 'assigned_to': recipient.name})
@@ -734,7 +748,7 @@ def upload(case_id):
         proceeding = db.session.get(Proceeding, proceeding_id)
         if not proceeding or proceeding.complaint_id != case.id or not (proceeding_allowed(proceeding, "coordinate") or proceeding_allowed(proceeding, "contribute")):
             abort(403, description="A current proceeding appointment with evidence access is required.")
-    elif not (case.submitter_user_id == g.user.id or allowed(case, "case.edit")):
+    elif not (case.submitter_user_id == g.user.id or allowed(case, "case.edit") or workflow_member(case)):
         abort(403, description="Proceeding participants must attach files to their assigned proceeding.")
     if case.status == 'disposed':
         abort(409, description='This complaint is closed. Evidence can be added after an authorized reopening.')
@@ -871,6 +885,10 @@ def review(pair_id):
     db.session.add(Review(pair_id=pair.id, user_id=g.user.id, decision=data.decision, reason=data.reason, revisions=pair.evidence["revisions"]))
     for case in (pair.a, pair.b):
         event(case, "overlap_reviewed", f"Possible overlap marked {data.decision}", data.reason, {"pair_id": pair.id})
+        owner = db.session.get(User, case.owner_id)
+        if owner and owner.active and db.session.scalar(select(Complaint.id).where(Complaint.id == case.id, scope(owner))):
+            notify(owner.id, case, 'overlap_review', f'{case.reference}: The reviewer marked a possible overlap {data.decision}. Review your case history and coordinate the next action.',
+                   f'pair-decision:{pair.id}:{pair.version}:{case.id}:{owner.id}')
     db.session.commit()
     return pair_json(pair, True)
 
