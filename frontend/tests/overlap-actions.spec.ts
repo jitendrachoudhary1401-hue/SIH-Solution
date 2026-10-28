@@ -1,23 +1,27 @@
+import { request } from '@playwright/test';
 import { test, expect, type Page } from './fixtures';
 
 async function signIn(page: Page) {
   await page.goto('/officer/login');
-  await page.getByLabel('Email address').fill('lead.rb@onecase.demo');
-  await page.getByLabel('Password', { exact: true }).fill('OneCaseDemo!2026');
-  await page.getByRole('button', { name: 'Sign in to workspace' }).click();
+  await page.getByRole('button',{name:'Demo accounts',exact:true}).click();
+  await page.getByRole('button',{name:'Try Officer demo',exact:true}).click();
   await expect(page.getByRole('heading', { name: /Good / })).toBeVisible();
 }
 
 async function complaint(page: Page, location: string, description: string) {
-  const identity = await (await page.request.get('/api/auth/me')).json();
-  const response = await page.request.post('/api/complaints', {
-    headers: { 'X-CSRF-Token': identity.csrf, 'Idempotency-Key': crypto.randomUUID() },
-    data: { institution_id: 1, owner_id: identity.user.id, incident_location: location,
-      category: 'Fee refund', description, issue_summary: 'Unpaid refund after timely withdrawal',
-      received_at: new Date().toISOString(), next_action: 'Review receipt and withdrawal record' },
-  });
-  expect(response.status()).toBe(201);
-  return response.json();
+  const publicClient = await request.newContext({baseURL:'http://127.0.0.1:5174'});
+  try {
+    const identity = await (await publicClient.post('/api/auth/demo-login',{data:{role:'student'}})).json();
+    const options = await (await publicClient.get('/api/intake/options')).json();
+    const response = await publicClient.post('/api/intake/complaints', {
+      headers: {'X-CSRF-Token':identity.csrf,'Idempotency-Key':crypto.randomUUID()},
+      data: {institution_id:options.institutions[0].id,incident_location:location,category:'Fee refund',
+        description,issue_summary:'Unpaid refund after timely withdrawal',declaration:true},
+    });
+    expect(response.status()).toBe(201);
+    return response.json();
+  } finally { await publicClient.dispose(); }
+
 }
 
 test('same issue at another location is excluded; officer can reject all suggestions', async ({ page }) => {
@@ -32,7 +36,8 @@ test('same issue at another location is excluded; officer can reject all suggest
   await expect(page.getByRole('heading', { name: 'Alerts', exact: true })).toBeVisible();
   await expect(page.locator('.overlap-group').filter({ hasText: different.reference })).toHaveCount(0);
   const second = await complaint(page, location, description);
-  await page.getByRole('button', { name: 'Check overlaps now' }).click();
+  await page.goto('/alerts');
+  await expect(page.getByRole('button',{name:'Check overlaps now'})).toHaveCount(0);
   const group = page.locator('.overlap-group').filter({ hasText: first.reference });
   await expect(group).toContainText(second.reference);
   await page.setViewportSize({width:390, height:844});
@@ -68,6 +73,6 @@ test('officer merges a connected group, sees original records and downloads a PD
   await expect(page.locator('.coordination-notice')).toContainText(second.reference);
   await page.goto('/complaints');
   const download = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Export PDF', exact: true }).click();
+  await page.getByRole('button', { name: 'Export PDF', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('onecase-complaints.pdf');
 });

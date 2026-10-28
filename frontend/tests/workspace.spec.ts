@@ -8,18 +8,13 @@ async function signIn(page: Page, email = 'lead.rb@onecase.demo') {
   await expect(page.getByRole('heading', { name: /Good / })).toBeVisible();
 }
 
-test('officer creates, acts on, disposes, reopens, and transfers a case', async ({ page }) => {
+test('officer manages an existing case, disposes, reopens, and transfers it', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await signIn(page);
-  await page.getByRole('button', { name: 'New complaint' }).click();
+  await expect(page.getByRole('button', {name:'New complaint',exact:true})).toHaveCount(0);
+  await page.goto('/complaints/1');
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Institution', { exact: true }).selectOption('1');
-  await dialog.getByLabel('Incident location', {exact: true}).fill('Synthetic main campus, accounts office');
-  await dialog.getByLabel('Complaint description').fill('The student withdrew within the permitted window but the institution has not returned the fee deposit. Written reminders remain unanswered.');
-  await dialog.getByLabel('Next action').fill('Request the fee refund ledger');
-  await dialog.getByLabel('Illustrative deadline rule').selectOption('demo-business-v1');
-  await dialog.getByRole('button', { name: 'Register complaint' }).click();
   await expect(page.getByRole('heading', { name: /^OC-/ })).toBeVisible();
   const reference = await page.getByRole('heading', { name: /^OC-/ }).innerText();
   await page.getByRole('button', { name: 'Record action', exact: true }).click();

@@ -17,7 +17,7 @@ const stepRoles: Record<string,string[]> = {initial_review:['faculty_reviewer'],
 export function LoginJourney() {
   return <section className="login-workflow" aria-labelledby="public-workflow-title">
     <p className="eyebrow">HOW YOUR COMPLAINT MOVES</p><h2 id="public-workflow-title">One complaint. A traceable path.</h2>
-    <p className="journey-intro">Students, parents, faculty, institution staff and other stakeholders register a complaint with supporting evidence. Every handover follows the same recorded journey, starting with an appointed faculty or grievance reviewer.</p>
+    <p className="journey-intro">Students, parents, faculty and institution staff register a complaint with supporting evidence. Every handover follows the same recorded journey, starting with an appointed faculty or grievance reviewer.</p>
     <ol className="handling-timeline public-timeline">{stages.map(([key, title, description], i) => <li key={key}><span className="handling-marker" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><div><h3>{title}</h3><p>{description}</p></div></li>)}</ol>
     <div className="journey-solution"><h3>Where OneCase connects the work</h3><dl>
       <div><dt>One institution record</dt><dd>Authorized teams can follow institution-related complaints across bureaus.</dd></div>

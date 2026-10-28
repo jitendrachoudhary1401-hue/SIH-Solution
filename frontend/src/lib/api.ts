@@ -90,7 +90,7 @@ export async function wakeBackend(signal?: AbortSignal): Promise<void> {
   throw new ApiError('The service has not finished starting. Please try again.', 503);
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, options: RequestInit = {}, responseKind: 'json' | 'blob' = 'json'): Promise<T> {
   const form = options.body instanceof FormData;
   let response: Response;
   try {
@@ -107,6 +107,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if ([502, 503, 504].includes(response.status) && !(response.status === 503 && path === '/auth/forgot-password')) {
     connectionLost();
     throw new ApiError('The service is unavailable. You have been signed out. Try signing in again when it is available.', response.status);
+  }
+  if (response.ok && responseKind === 'blob') {
+    if (!response.headers.get('content-type')?.includes('application/pdf')) throw new ApiError('The server did not return a PDF. Please try again.', response.status);
+    return await response.blob() as T;
   }
   const data = await response.json().catch((error: unknown) => {
     if (options.signal?.aborted) throw error;

@@ -6,7 +6,7 @@ from flask import Blueprint, abort, current_app, g, request
 from pydantic import Field
 from sqlalchemy import select
 from .api import Input, parse, CATEGORIES, hasher, institution_json, case_json, event, enqueue, notify
-from .auth import authenticated, PUBLIC_ROLES, digest
+from .auth import authenticated, PUBLIC_ROLES, SUBMITTER_ROLES, digest
 from .models import db, User, Bureau, Institution, Complaint, Assignment, Idempotency, now
 
 intake_api = Blueprint('intake', __name__)
@@ -29,8 +29,8 @@ class Submission(Input):
 
 
 def stakeholder():
-    if g.user.role not in PUBLIC_ROLES:
-        abort(403, description='This form is for students, parents, faculty, non-teaching staff and other stakeholders.')
+    if g.user.role not in SUBMITTER_ROLES:
+        abort(403, description='Only students, parents, institution staff and faculty may register complaints. Review roles manage assigned cases.')
 
 
 def intake_owner():

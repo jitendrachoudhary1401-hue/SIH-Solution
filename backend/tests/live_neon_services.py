@@ -65,10 +65,19 @@ try:
         raise RuntimeError("Synthetic lead sign-in did not succeed")
     headers = {"X-CSRF-Token": login.json["csrf"], "Idempotency-Key": "neon-live-" + uuid4().hex}
     print("PASS officer authentication backed by Neon")
-    from app.models import now
-    response = client.post("/api/complaints", headers=headers, json={"institution_id": institution_id, "owner_id": owner_id, "category": "Other",
-        "description": "Synthetic Neon integration verification. This separate demonstration record has no real complainant data.",
-        "received_at": now().isoformat(), "next_action": "Verify the private evidence flow"})
+    from app.models import User
+    from app.api import hasher
+    email = 'neon-student-' + uuid4().hex + '@example.test'
+    with app.app_context():
+        db.session.add(User(name='Synthetic integration student',email=email,role='student',password_hash=hasher.hash('SyntheticNeonPass!2026')))
+        db.session.commit()
+    app.config['PUBLIC_INTAKE_OWNER_ID'] = owner_id
+    identity=client.post('/api/auth/login',json={'email':email,'password':'SyntheticNeonPass!2026'})
+    assert identity.status_code==200
+    headers={'X-CSRF-Token':identity.json['csrf'],'Idempotency-Key':'neon-live-'+uuid4().hex}
+    response = client.post('/api/intake/complaints',headers=headers,json={'institution_id':institution_id,
+        'category':'Other','incident_location':'Synthetic integration office','issue_summary':'Synthetic private evidence integration',
+        'description':'Synthetic Neon integration verification. This separate demonstration record has no real complainant data.','declaration':True})
     assert response.status_code == 201, "Complaint registration failed"
     case_id = response.json["id"]
     replay = client.get(f"/api/complaints/{case_id}")

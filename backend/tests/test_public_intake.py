@@ -21,7 +21,7 @@ def details():
             'affected_person': 'Enrolled Student', 'representation_basis': 'Parent and guardian of the enrolled student', 'declaration': True}
 
 
-@pytest.mark.parametrize('role', ['student', 'parent', 'faculty', 'staff', 'other'])
+@pytest.mark.parametrize('role', ['student', 'parent', 'faculty', 'staff'])
 def test_intake_ownership_assignment_and_idempotency(app, client, role):
     with app.app_context():
         officer_id = db.session.scalar(select(User.id).where(User.email == 'officer.rb@onecase.demo'))

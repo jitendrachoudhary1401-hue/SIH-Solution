@@ -18,7 +18,7 @@ The website uses a warm ivory and terracotta theme, readable text and sharp cont
 
 | Area | Current behaviour |
 | --- | --- |
-| Public intake | Registration for students, parents, faculty, staff and other stakeholders; complaint source, institution, proof uploads and a personal timeline. Staff registrations request approval before receiving staff access. |
+| Public intake | Registration for students, parents, faculty and institution staff; complaint source, institution, proof uploads and a personal timeline. Staff registrations request approval before receiving staff access. |
 | Handling timeline | Initial faculty/grievance report, officer triage, lead and committee assessments, independent investigation, conditional auditor review, executive outcome and complainant appeal. Initial recommendations cannot dismiss cases. See [handling workflow and setup](docs/COMPLAINT_HANDLING_WORKFLOW.md). |
 | Case coordination | Accountable owner, next action, original receipt date, recorded transfers and recipient acknowledgement. Authorized status changes support disposal and reopening. |
 | Proceedings | Authority and route records, expiring appointments, notices/orders, milestone revisions, case packets, actual dispatch and acknowledgement records. |
@@ -207,3 +207,11 @@ docs/               Setup, schema and implementation audit
 ```
 
 The implementation preserves original complaint records and uses human review for relationships and outcomes. The normalized identity/issue schema is additive; a schema row alone does not establish identity, prove an allegation or mean every roadmap feature is complete.
+
+### Current submission and overlap rules
+
+Only student, parent, faculty and institution-staff accounts can submit complaints. Officers, leads and review roles manage existing records; both complaint-creation API routes enforce this restriction.
+
+Overlap checks run automatically after intake/changes and periodically in staff workspaces. The dashboard, bell, Alerts and Overlap review use current ongoing suggestions; resolved cases are excluded from active pairs. Earlier resolutions appear separately as repeat-issue timelines. Missing locations are shown as actionable links rather than silently treated as zero matches. Institution and bureau filters use integer identifiers for PostgreSQL.
+
+Opt-in public demo setup repairs only the reserved synthetic college's verification status and provisions scoped PDF export grants for the demo officer and lead. It never verifies real colleges or opens real records to demo users. PDF download errors stay in the workspace instead of opening a JSON error page.

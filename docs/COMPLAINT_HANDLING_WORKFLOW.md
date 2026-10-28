@@ -1,6 +1,6 @@
 # Complaint handling timeline
 
-New portal submissions by students, parents, faculty, institution staff and other stakeholders use the same internal handling sequence:
+New portal submissions by students, parents, faculty and institution staff use the same internal handling sequence:
 
 1. An appointed faculty / grievance reviewer records the initial report.
 2. The accountable officer reviews and triages the complaint.
@@ -41,7 +41,7 @@ This is an internal application workflow. Existing external proceedings, statuto
 
 An overlap suggestion requires the same verified institution, incident location and category, plus similar complaint facts. A shared location alone or a similar issue at a different location does not qualify. Location text is compared after case/whitespace normalization; aliases are not inferred. New website complaint forms require a location. Older/API records without one remain excluded until an authorized officer records it.
 
-A bounded text check runs in the intake/edit transaction and detects strongly similar wording (85% threshold) without a separate worker. It is labelled **Text similarity**, never presented as neural inference. Neural retrieval/reranking remains queued and requires installed models and a running worker. The immediate check considers up to 200 recent same-institution/category records per complaint. **Check overlaps now** checks the newest 100 authorized active cases; Alerts/Overlap review runs this check on entry. Officers receive persistent scoped alerts; the bell displays the unread count. Repeated processing does not duplicate unchanged alerts.
+A bounded text check runs in the intake/edit transaction and detects strongly similar wording (85% threshold) without a separate worker. It is labelled **Text similarity**, never presented as neural inference. Neural retrieval/reranking remains queued and requires installed models and a running worker. The immediate check considers up to 200 recent same-institution/category records per complaint. The newest 100 authorized ongoing cases are checked automatically on workspace entry and every 30 seconds while the workspace is active; there is no separate overlap refresh button. Officers receive persistent scoped alerts; the bell displays the unread count. Repeated processing does not duplicate unchanged alerts.
 
 Officers can decide pairs when responsible for both cases; a bureau lead can decide both within their bureau, and a designated reviewer needs content access to both. The group preview provides **Reject all** and **Merge all**. Both require a reason, a current version snapshot and an explicit confirmation. Reject dismisses the suggestions; it does not reject complaints. Merge requires one connected set, the same institution/location/category, active cases and a selected primary complaint. It creates a coordination group and an audit trail while preserving every complaint, owner, evidence record, investigation, deadline, outcome and appeal right. Existing group members must all remain authorized before combining groups. Group membership grants no access and does not automatically propagate case decisions. A changed or inaccessible suggestion rejects the entire batch atomically.
 

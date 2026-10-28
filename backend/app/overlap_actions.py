@@ -111,6 +111,26 @@ def alert_owners(pair):
                    f"pair-owner:{pair.id}:{revisions[str(pair.a.id)]}:{revisions[str(pair.b.id)]}:{case.id}:{owner.id}")
 
 
+def active_notification_keys():
+    """Only live, ongoing suggestions count as actionable overlap notifications."""
+    visible = select(Complaint.id).where(scope())
+    pairs = db.session.scalars(select(Pair).where(Pair.state == 'pending', Pair.band != 'low',
+        (Pair.case_a_id.in_(visible)) | (Pair.case_b_id.in_(visible)),
+        Pair.a.has(Complaint.status != 'disposed'), Pair.b.has(Complaint.status != 'disposed')))
+    keys = []
+    for pair in pairs:
+        if is_stale(pair):
+            continue
+        revisions = pair.evidence['revisions']
+        revision_key = f'{revisions[str(pair.a.id)]}:{revisions[str(pair.b.id)]}'
+        for case in (pair.a, pair.b):
+            if case.owner_id == g.user.id:
+                keys.append(f'pair-owner:{pair.id}:{revision_key}:{case.id}:{g.user.id}')
+        if 'reviewer' in roles() and db.session.scalar(authorized_pairs().where(Pair.id == pair.id)):
+            keys.append(f'pair:{pair.id}:{revision_key}:{g.user.id}')
+    return keys
+
+
 def detect_text_overlaps(case):
     """Bounded, cheap text check, independent of neural-worker availability.
 
@@ -185,13 +205,19 @@ def scan_overlaps():
     # Visit only the newest 100 authorized active cases. Existing semantic evidence is preserved.
     cases = db.session.scalars(select(Complaint).where(scope(), Complaint.status != 'disposed').order_by(Complaint.id.desc()).limit(100)).all()
     cases = [c for c in cases if has_content(c)]
+    missing = [{'id': c.id, 'reference': c.reference} for c in cases if len(location_key(c.incident_location)) < 2]
+    unverified = [{'id': c.id, 'reference': c.reference} for c in cases if not c.institution.verified]
     for case in cases:
         detect_text_overlaps(case)
     # Reconcile existing neural suggestions too (e.g. cases assigned after inference).
     for pair in db.session.scalars(authorized_pairs().where(Pair.state == 'pending', Pair.band != 'low')):
         alert_owners(pair)
     db.session.commit()
-    return {'checked': len(cases), 'message': 'Text check finished. Semantic matching continues separately.', 'case_limit': 100}
+    pending = [p for p in db.session.scalars(authorized_pairs().where(Pair.state == 'pending', Pair.band != 'low')) if not is_stale(p)]
+    return {'checked': len(cases), 'message': 'Text check finished. Semantic matching continues separately.', 'case_limit': 100,
+            'missing_location': missing, 'unverified_institution': unverified,
+            'pending_pairs': len(pending),
+            'eligible': sum(c.institution.verified and len(location_key(c.incident_location)) >= 2 for c in cases)}
 
 
 @api.post('/overlaps/bulk')

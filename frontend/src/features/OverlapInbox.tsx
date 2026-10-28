@@ -1,6 +1,6 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Link2, RefreshCw } from 'lucide-react';
 import { Auth, Badge, ErrorBox, Field, FormError, Modal, useSave } from '../components/ui';
 import { api, date, post, type Case, type Page, type Pair } from '../lib/api';
@@ -22,25 +22,29 @@ export function CoordinationNotice({ c }: { c: Case }) {
   </>;
 }
 
+type OverlapSync = { checked: number; eligible: number; pending_pairs: number; missing_location: {id: number; reference: string}[]; unverified_institution: {id: number; reference: string}[] };
+export function useOverlapSync() {
+  const { user } = useContext(Auth);
+  return useQuery({ queryKey: ['overlap-sync'], queryFn: ({signal}) => api<OverlapSync>('/overlaps/scan', {method:'POST',body:'{}',signal}), enabled: !!user.capabilities.overlaps, staleTime:25000, refetchInterval:30000, retry:false });
+}
+
 export default function OverlapInbox({ compact = false }: { compact?: boolean }) {
   const { user } = useContext(Auth);
-  const client = useQueryClient();
   const enabled = !!user.capabilities.overlaps;
-  const checked = useRef(false);
-  const [notice, setNotice] = useState('');
   const [confirmation, setConfirmation] = useState<{ action: 'merge' | 'reject'; pairs: Pair[] } | null>(null);
   const query = useQuery({ queryKey: ['/overlaps?state=pending&limit=100'], queryFn: ({ signal }) => api<Page<Pair>>('/overlaps?state=pending&limit=100', { signal }), enabled, refetchInterval: 15000 });
-  const scan = useMutation({ mutationFn: () => post<{ checked: number }>('/overlaps/scan', {}), onSuccess: async result => { setNotice(`Checked ${result.checked} active complaints. Same issue and same incident location are required. Semantic matching continues separately.`); await client.invalidateQueries(); } });
-  useEffect(() => { if (enabled && !checked.current) { checked.current = true; scan.mutate(); } }, [enabled]);
+  const scan = useOverlapSync();
   const save = useSave((values: Record<string, unknown>) => post('/overlaps/bulk', { ...values, action: confirmation?.action, pairs: confirmation?.pairs.map(p => ({ id: p.id, version: p.version })) }), () => setConfirmation(null));
   if (!enabled) return null;
   const pending = query.data?.items.filter(p => !p.stale) || [];
   const groups = clusters(pending.filter(p => p.can_review));
   const preview = confirmation ? [...new Map(confirmation.pairs.flatMap(p => [p.a, p.b]).map(c => [c.id, c])).values()] : [];
   return <section className="card overlap-inbox" aria-label="Overlap alerts and actions">
-    <div className="card-heading"><h2><AlertTriangle size={20} /> Overlap alerts {pending.length > 0 && <span className="count">{pending.length}</span>}</h2><button className="button secondary small" disabled={scan.isPending} onClick={() => scan.mutate()}><RefreshCw size={15} />{scan.isPending ? 'Checking…' : 'Check overlaps now'}</button></div>
-    <div className="overlap-body"><p>Same issue + same incident location. Shared location alone, or similar complaints at different locations, do not qualify.</p><ErrorBox error={query.error || scan.error} />{notice && <p className="muted" role="status">{notice}</p>}
-    {query.data && !pending.length && <p className="muted">No current overlap suggestions in your scope. Older complaints need an incident location before they can be checked.</p>}
+    <div className="card-heading"><h2><AlertTriangle size={20} /> Overlap alerts {pending.length > 0 && <span className="count">{pending.length}</span>}</h2><span className="muted">Updates automatically</span></div>
+    <div className="overlap-body"><p>Same issue + same incident location. Shared location alone, or similar complaints at different locations, do not qualify.</p><ErrorBox error={query.error || scan.error} />{scan.data && <p className="muted" role="status">{scan.data.eligible} of {scan.data.checked} ongoing complaints have the institution and location needed for comparison.</p>}
+    {query.data && !scan.isPending && !scan.error && !query.error && !pending.length && <p className="muted">No current overlap suggestions in your scope. Older complaints need an incident location before they can be checked.</p>}
+    {!!scan.data?.missing_location?.length && <details className="overlap-blocked"><summary>{scan.data.missing_location.length} complaints need an incident location</summary><p>Open each complaint, choose Edit details, and record the actual location. Locations are not guessed.</p><ul>{scan.data.missing_location.map(c => <li key={c.id}><Link to={`/complaints/${c.id}`}>{c.reference}</Link></li>)}</ul></details>}
+    {!!scan.data?.unverified_institution?.length && <p className="notice">Institution verification is needed for {scan.data.unverified_institution.length} complaints before comparison. Real institution identities require an authorized verification.</p>}
     {compact ? pending.length > 0 && <Link className="text-button" to="/overlaps">Review possible overlaps and take action →</Link> : <>
       {groups.map(group => {
         const cases = [...new Map(group.flatMap(p => [p.a, p.b]).map(c => [c.id, c])).values()];

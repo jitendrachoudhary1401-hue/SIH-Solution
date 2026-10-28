@@ -9,6 +9,7 @@ from .models import (db, Complaint, Grant, Session, now, RoleAssignment, Permiss
 
 ROLES = {"faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
 PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
+SUBMITTER_ROLES = {"student", "parent", "faculty", "staff"}
 MFA_ROLES = {"faculty_reviewer", "lead", "reviewer", "committee", "verifier", "executive", "admin"}
 OPERATIONS = {"case.read", "case.transition", "case.transfer", "case.route", "case.packet", "documents.read",
               "case.export", "audit.read", "monitor.aggregate", "case.proceeding", "case.compliance"}
@@ -233,8 +234,9 @@ def document_allowed(case, attachment, user=None):
 def capabilities(user):
     effective = roles(user)
     if user.role in PUBLIC_ROLES or user.role == "pending":
-        return {"account": True, "cases": user.role != "pending", "alerts": user.role != "pending", "submit_complaint": user.role in PUBLIC_ROLES}
-    return {"register": bool(effective & {"officer", "lead"}) and bool(user.bureau_id),
+        return {"account": True, "cases": user.role != "pending", "alerts": user.role != "pending", "submit_complaint": user.role in SUBMITTER_ROLES}
+    return {"register": False,
+            "export_register": bool(effective & {"officer", "lead", "executive", "auditor"}) and any(p.operation == 'case.export' for p in effective_grants(user)),
             "dashboard": bool(effective & {"officer", "lead", "reviewer", "verifier", "executive", "auditor"}),
             "cases": bool(effective), "institutions": bool(effective - {"admin", "committee"}),
             "overlaps": bool(effective & {"reviewer", "officer", "lead"}), "alerts": bool(effective),

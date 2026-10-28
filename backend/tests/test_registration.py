@@ -21,7 +21,7 @@ def test_public_registration_persists_and_starts_empty(app, client, kind):
     assert auth.status_code == 200
     assert auth.json["user"]["role"] == kind
     assert auth.json["user"]["bureau_id"] is None
-    assert auth.json["user"]["capabilities"] == {"account": True, "cases": True, "alerts": True, "submit_complaint": True}
+    assert auth.json["user"]["capabilities"] == {"account": True, "cases": True, "alerts": True, "submit_complaint": kind != 'other'}
     assert client.get("/api/account/summary").json == {"total": 0, "active": 0, "closed": 0, "unread_alerts": 0}
     assert client.get("/api/complaints").json["items"] == []
     assert client.get("/api/complaints/1").status_code == 404

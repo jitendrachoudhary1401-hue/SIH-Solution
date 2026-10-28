@@ -26,22 +26,13 @@ def test_access_csrf_expiry_logout(client, app):
     assert client.get("/api/complaints").status_code == 401
 
 
-def test_registration_idempotency_validation_and_rollback(client, app):
+def test_officers_manage_existing_cases_but_cannot_register_complaints(client, app):
     headers = {**login(client), "Idempotency-Key": "request-123456"}
-    data = payload()
-    response = client.post("/api/complaints", headers=headers, json=data)
-    assert response.status_code == 201, response.json
-    case = response.json
-    replay = client.post("/api/complaints", headers=headers, json=data)
-    assert replay.status_code == 200 and replay.json["id"] == case["id"]
-    data["description"] += " Another issue."
-    assert client.post("/api/complaints", headers=headers, json=data).status_code == 409
-    assert client.post("/api/complaints", headers={**headers, "Idempotency-Key": "request-invalid"}, json={**data, "owner_id": 3}).status_code == 422
+    assert client.get('/api/auth/me').json['user']['capabilities']['register'] is False
+    assert client.post('/api/complaints',headers=headers,json=payload()).status_code==403
+    assert client.post('/api/intake/complaints',headers=headers,json=payload()).status_code==403
     with app.app_context():
-        assert db.session.scalar(select(func.count()).select_from(Complaint)) == 9
-        assert db.session.scalar(select(func.count()).select_from(Assignment).where(Assignment.complaint_id == case["id"])) == 1
-        assert db.session.scalar(select(func.count()).select_from(ActionEvent).where(ActionEvent.complaint_id == case["id"])) == 1
-        assert db.session.scalar(select(Job).where(Job.complaint_id == case["id"]))
+        assert db.session.scalar(select(func.count()).select_from(Complaint))==8
 
 
 def test_lifecycle_stale_version_and_reporting(client, app):

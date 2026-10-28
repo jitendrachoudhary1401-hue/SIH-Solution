@@ -261,6 +261,14 @@ def notify(user_id, case, kind, message, key):
         db.session.add(Notification(user_id=user_id, complaint_id=case.id, kind=kind, message=message, dedup_key=key))
 
 
+def notification_query():
+    from .overlap_actions import active_notification_keys
+    visible = select(Complaint.id).where(scope())
+    return select(Notification).where(Notification.user_id == g.user.id,
+        or_(Notification.complaint_id.is_(None), Notification.complaint_id.in_(visible)),
+        or_(Notification.kind != 'overlap', Notification.dedup_key.in_(active_notification_keys())))
+
+
 def filtered_cases(receipt_dates=True, aggregate=False):
     query = select(Complaint).join(Institution).where(scope(aggregate=aggregate))
     filters = request.args
@@ -270,7 +278,15 @@ def filtered_cases(receipt_dates=True, aggregate=False):
     for key, column in [("bureau", Complaint.bureau_id), ("institution", Complaint.institution_id), ("status", Complaint.status),
                         ("category", Complaint.category), ("region", Institution.region)]:
         if filters.get(key):
-            query = query.where(column == filters[key])
+            value = filters[key]
+            if key in ('bureau', 'institution'):
+                try:
+                    value = int(value)
+                except ValueError:
+                    abort(422, description=f'Invalid {key} filter. Choose a valid numeric identifier.')
+                if value <= 0:
+                    abort(422, description=f'Invalid {key} filter.')
+            query = query.where(column == value)
     for key, sign in ([("from", "start"), ("to", "end")] if receipt_dates else []):
         if filters.get(key):
             try:
@@ -348,7 +364,7 @@ def account_summary():
     cases = select(Complaint.id).where(scope())
     total = db.session.scalar(select(func.count()).select_from(cases.subquery()))
     active = db.session.scalar(select(func.count()).select_from(Complaint).where(scope(), Complaint.status != "disposed"))
-    unread = db.session.scalar(select(func.count()).select_from(Notification).where(Notification.user_id == g.user.id, Notification.read_at.is_(None)))
+    unread = db.session.scalar(select(func.count()).select_from(notification_query().where(Notification.read_at.is_(None)).subquery()))
     return {"total": total, "active": active, "closed": total - active, "unread_alerts": unread}
 
 
@@ -486,67 +502,9 @@ def complaints():
 @api.post("/complaints")
 @authenticated
 def register_case():
-    if not roles() & {"officer", "lead"}:
-        abort(403, description="Only officers may register complaints.")
-    data = parse(Registration)
-    if data.complainant_type not in ("student", "parent", "faculty", "staff", "other") or data.sensitivity not in ("standard", "restricted"):
-        abort(422, description="Choose a valid complainant type and sensitivity.")
-    if data.affected_person and data.submitter_name and data.affected_person != data.submitter_name and len(data.representation_basis) < 5:
-        abort(422, description="Record the representative's authorization basis.")
-    if data.source_channel in ("Import", "Portal reference") and not data.source_reference:
-        abort(422, description="Imported/source-system complaints require their original reference.")
-    if data.category not in CATEGORIES or data.priority not in ("low", "normal", "high", "urgent"):
-        abort(422, description="Choose a valid category and priority.")
-    if data.received_at > now() + timedelta(minutes=1):
-        abort(422, description="Receipt date cannot be in the future.")
-    if data.due_at and (data.due_at <= data.received_at or len(data.deadline_reason) < 5):
-        abort(422, description="An explicit deadline must follow receipt and have a recorded reason.")
-    if data.deadline_rule not in ("none", "demo-business-v1", "demo-elapsed-v1"):
-        abort(422, description="Invalid deadline rule.")
-    if data.due_at and data.deadline_rule != "none":
-        abort(422, description="Choose either an illustrative rule or an explicit deadline.")
-    institution = db.session.get(Institution, data.institution_id)
-    owner = db.session.get(User, data.owner_id)
-    if g.user.is_demo and (not institution or institution.external_id != "ONECASE-PUBLIC-DEMO" or not owner or not owner.is_demo):
-        abort(422, description="Demo complaints must use the demonstration institution and demo officers.")
-    if not institution or not owner or not owner.active or owner.bureau_id != g.user.bureau_id or owner.role not in ("officer", "lead"):
-        abort(422, description="Select an institution and an active accountable officer in your bureau.")
-    if "lead" not in roles() and owner.id != g.user.id:
-        abort(403, description="Only a bureau lead may assign another officer.")
-    key = request.headers.get("Idempotency-Key", "")
-    if not 8 <= len(key) <= 100:
-        abort(422, description="An Idempotency-Key of 8–100 characters is required.")
-    payload_digest = digest(json.dumps(data.model_dump(mode="json"), sort_keys=True))
-    previous = db.session.scalar(select(Idempotency).where(Idempotency.user_id == g.user.id, Idempotency.key == key))
-    if previous:
-        if previous.digest != payload_digest:
-            abort(409, description="This submission key was already used for different content.")
-        return case_json(case_or_404(previous.complaint_id), True), 200
-    case = Complaint(reference=f"OC-{now().year}-{uuid4().hex.upper()}", institution_id=institution.id,
-                     category=data.category, description=data.description, priority=data.priority, incident_location=data.incident_location,
-                     bureau_id=owner.bureau_id, owner_id=owner.id, received_at=data.received_at,
-                     due_at=data.due_at, deadline_policy="Authorized explicit deadline v1" if data.due_at else "Deadline not set",
-                     next_action=data.next_action)
-    for field in ("issue_summary", "complainant_type", "affected_person", "submitter_name", "representation_basis", "source_channel", "source_reference", "prior_proceedings", "sensitivity"):
-        setattr(case, field, getattr(data, field))
-    db.session.add(case)
-    if data.deadline_rule != "none":
-        from .sla import calculate
-        mode = "business" if data.deadline_rule == "demo-business-v1" else "elapsed"
-        minutes = 10 * 8 * 60 if mode == "business" else 14 * 24 * 60
-        case.deadline_config = {"mode": mode, "minutes": minutes, "version": data.deadline_rule, "timezone": "Asia/Kolkata", "holidays": [], "working_hours": "09:00–17:00", "weekdays": "Mon–Fri", "illustrative": True}
-        case.due_at = calculate(data.received_at, minutes, mode)
-        case.deadline_policy = f"Illustrative {mode} policy {data.deadline_rule}"
-    elif data.due_at:
-        case.deadline_config = {"mode": "elapsed", "minutes": (data.due_at - data.received_at).total_seconds() / 60, "version": "explicit-v1", "timezone": "Asia/Kolkata"}
-    db.session.flush()
-    db.session.add(Assignment(complaint_id=case.id, bureau_id=case.bureau_id, owner_id=case.owner_id, reason="Initial registration"))
-    db.session.add(Idempotency(user_id=g.user.id, key=key, digest=payload_digest, complaint_id=case.id))
-    event(case, "registered", "Complaint registered and intake acknowledged", data.deadline_reason,
-          {"acknowledgement": {"reference": case.reference, "source_receipt_at": iso(case.received_at), "entry_at": iso(case.entered_at)}, "source_channel": case.source_channel})
-    enqueue(case)
-    db.session.commit()
-    return case_json(case, True), 201
+    # Both entry points use the same public-role policy and server-derived owner.
+    from .intake import submit
+    return submit()
 
 
 @api.get("/complaints/<int:case_id>")
@@ -886,6 +844,7 @@ def pair_json(pair, detailed=False):
 @authenticated
 def overlaps():
     query = authorized_pairs().where(or_(Pair.band != "low", Pair.state != "pending"))
+    query = query.where(Pair.a.has(Complaint.status != 'disposed'), Pair.b.has(Complaint.status != 'disposed'))
     if request.args.get("state"):
         query = query.where(Pair.state == request.args["state"])
     cohort = filtered_cases().with_only_columns(Complaint.id)
@@ -934,14 +893,18 @@ def review(pair_id):
 @api.get("/notifications")
 @authenticated
 def notifications():
-    visible = select(Complaint.id).where(scope())
-    query = select(Notification).where(Notification.user_id == g.user.id, or_(Notification.complaint_id.is_(None), Notification.complaint_id.in_(visible)))
+    query = notification_query()
     if request.args.get('unread') == 'true':
         query = query.where(Notification.read_at.is_(None))
     def serialize(item):
         from .overlap_actions import recurrence_notification_message
         message = recurrence_notification_message(item) if item.kind == 'repeat_issue' else item.message
-        return {"id": item.id, "kind": item.kind, "message": message, "complaint_id": item.complaint_id,
+        action_url = f'/complaints/{item.complaint_id}' if item.complaint_id else None
+        if item.kind == 'overlap':
+            parts = item.dedup_key.split(':')
+            if len(parts) > 1 and parts[1].isdigit() and db.session.scalar(authorized_pairs().where(Pair.id == int(parts[1]))):
+                action_url = f'/overlaps/{parts[1]}'
+        return {"id": item.id, "kind": item.kind, "message": message, "complaint_id": item.complaint_id, 'action_url': action_url,
                 "read_at": iso(item.read_at), "created_at": iso(item.created_at)}
     return page(query.order_by(Notification.id.desc()), serialize, Notification)
 
@@ -978,6 +941,7 @@ def attention_key(case):
 @api.get("/dashboard/summary")
 @authenticated
 def dashboard():
+    from .overlap_actions import is_stale
     cases = db.session.scalars(filtered_cases(aggregate=True)).all()
     active = [c for c in cases if c.status != "disposed"]
     ids = [c.id for c in cases]
@@ -996,7 +960,7 @@ def dashboard():
         trend.append({"week": start.strftime("%d %b"), "received": received, "disposed": disposed})
     recent = db.session.scalars(select(ActionEvent).where(ActionEvent.complaint_id.in_(readable_ids)).order_by(ActionEvent.id.desc()).limit(6)).all()
     return {"total": len(cases), "active": len(active), "overdue": sum(condition(c) == "overdue" for c in active),
-            "pending_pairs": sum(p.state == "pending" and p.band != "low" for p in pairs),
+            "pending_pairs": sum(p.state == "pending" and p.band != "low" and not is_stale(p) for p in pairs),
             "confirmed_pairs": sum(p.state == "related" for p in pairs),
             "attention": [case_json(c) for c in sorted(active, key=attention_key) if c.id in readable_ids][:6],
             "recent": [event_json(e) for e in recent], "trend": trend, "asOf": iso(now()),
