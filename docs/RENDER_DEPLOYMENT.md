@@ -49,6 +49,8 @@ If setting up the web service manually:
    - **Start Command:**
      - Using Waitress: `python serve.py`
      - Or using Uvicorn (ASGI): `uvicorn main:app --host 0.0.0.0 --port $PORT`
+     - For a manually configured service without a pre-deploy command: `python migrate.py && python serve.py`.
+     - Keep `API_HOST=0.0.0.0`. Waitress now automatically selects this public binding when Render's built-in `RENDER=true` is present, even if an old localhost setting was copied. It uses Render's `PORT` ahead of the local `API_PORT` setting.
    - **Health Check Path:** `/api/health`
 
 ---
