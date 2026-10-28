@@ -33,6 +33,8 @@ Executive closure retains the existing evidence availability checks, independent
 
 Internal stage reports remain available to authorized case readers; public complainants see the stage, team, communicated outcome and safe action events rather than internal investigation reports.
 
+Editing the substance of an active complaint opens a fresh handling cycle. Earlier reports remain preserved, but they do not satisfy the new cycle's stage checks. Completed cases cannot be silently edited through the old detail form.
+
 This is an internal application workflow. Existing external proceedings, statutory authorities, jurisdiction, appeal eligibility and deadline policies remain separate. An internal appeal request is not proof of external filing.
 
 ## Overlap coordination

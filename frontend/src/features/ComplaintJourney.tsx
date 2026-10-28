@@ -11,6 +11,8 @@ const stages = [
   ['executive_decision', 'Executive decision', 'The executive reviews the reports and records an outcome supported by evidence.'],
   ['resolved', 'Outcome and appeal', 'The complainant views the decision and closure PDF, or requests an appeal review.'],
 ];
+const stepRoles: Record<string,string[]> = {initial_review:['faculty_reviewer'],officer_triage:['officer'],
+  committee_review:['lead','committee'],investigation:['reviewer','verifier'],executive_decision:['executive'],resolved:['executive']};
 
 export function LoginJourney() {
   return <section className="login-workflow" aria-labelledby="public-workflow-title">
@@ -57,7 +59,7 @@ export default function HandlingWorkflow({c}: {c: Case}) {
   return <section className="card handling-panel" aria-labelledby="case-handling-title">
     <div className="card-heading"><div><p className="eyebrow">COMPLAINT HANDLING · CYCLE {flow.cycle}</p><h2 id="case-handling-title">{flow.stage_label}</h2></div><span className="badge">{flow.stage === 'resolved' ? flow.outcome === 'not_upheld' ? 'Closed: not upheld' : 'Resolved' : 'In progress'}</span></div>
     <ol className="handling-timeline">{stages.map(([key,title,description],i) => <li key={key} className={i < current || flow.stage === 'resolved' ? 'complete' : i === current ? 'current' : ''} aria-current={i === current ? 'step' : undefined}>
-      <span className="handling-marker" aria-hidden="true">{String(i + 1).padStart(2,'0')}</span><div><h3>{flow.stage === 'appeal_review' && key === 'committee_review' ? 'Appeal review' : title}</h3><p>{description}</p><small>{i < current || flow.stage === 'resolved' ? 'Completed' : i === current ? 'Current stage' : 'Upcoming'}</small></div></li>)}</ol>
+      <span className="handling-marker" aria-hidden="true">{String(i + 1).padStart(2,'0')}</span><div><h3>{flow.stage === 'appeal_review' && key === 'committee_review' ? 'Appeal review' : title}</h3><p>{description}</p><p className="handling-assignees">{flow.team.filter(t => (stepRoles[key] || []).includes(t.role) || key === 'investigation' && flow.auditor_required && t.role === 'auditor').map(t => `${label(t.role)}: ${t.name}`).join(' · ')}</p><small>{i < current || flow.stage === 'resolved' ? 'Completed' : i === current ? 'Current stage' : 'Upcoming'}</small></div></li>)}</ol>
     <p className="muted">Audit review: {flow.auditor_required ? 'Required before the executive decision' : 'Can be added when the case requires it'}. External proceedings remain separate.</p>
     <details className="handling-team"><summary>Assigned handling team</summary><dl className="detail-grid">{flow.team.map(t => <div key={t.role}><dt>{label(t.role)}</dt><dd>{t.name}</dd></div>)}</dl><p className="muted">Case-bound team access until {date(flow.access_until, true)} IST. Access also requires an active approved role and no recorded conflict.</p></details>
     {flow.public_decision && <div className="notice"><div><strong>{flow.stage === 'resolved' ? 'Communicated outcome' : 'Previous communicated outcome'}</strong><p className="description-text">{flow.public_decision}</p></div></div>}

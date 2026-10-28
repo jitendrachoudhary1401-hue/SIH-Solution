@@ -109,6 +109,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new ApiError('The service is unavailable. You have been signed out. Try signing in again when it is available.', response.status);
   }
   const data = await response.json().catch((error: unknown) => {
+    if (options.signal?.aborted) throw error;
     if (!leavingPage && (error instanceof TypeError || (error instanceof DOMException && error.name !== 'SyntaxError'))) {
       connectionLost();
       throw new ApiError('Connection lost while receiving the response. Sign in again after reconnecting.', 0);

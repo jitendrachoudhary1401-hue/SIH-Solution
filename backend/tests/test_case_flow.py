@@ -118,6 +118,15 @@ def test_team_scope_conflicts_expiry_independence_and_report_privacy(app):
     assert faculty.post(f'/api/complaints/{cid}/case-workflow/reports', headers=fh,
                         json={'version':version,'report':'Stale request should not overwrite a newer report.'}).status_code == 409
     assert faculty.get(f'/api/complaints/{cid}/case-workflow/candidates').status_code == 403
+    officer, oh = acting(app,users,'officer')
+    before = officer.get(f'/api/complaints/{cid}').json
+    changed = officer.patch(f'/api/complaints/{cid}',headers=oh,json={'version':before['version'],
+        'description':'Newly reported facts change the complaint and require fresh independent assessments.',
+        'reason':'Preserve old reports and request review of changed facts'})
+    assert changed.status_code == 200
+    restarted=faculty.get(f'/api/complaints/{cid}/case-workflow').json
+    assert restarted['stage']=='initial_review' and restarted['cycle']==2 and restarted['reports']==[]
+    assert restarted['report_history'][0]['cycle']==1
     with app.app_context():
         flow = db.session.get(CaseWorkflow,cid); flow.access_until = now() - timedelta(seconds=1); db.session.commit()
     assert faculty.get(f'/api/complaints/{cid}').status_code == 404

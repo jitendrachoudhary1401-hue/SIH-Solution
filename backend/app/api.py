@@ -559,6 +559,10 @@ def edit_case(case_id):
     case = case_or_404(case_id, write=True)
     data = parse(OrdinaryChange)
     check_version(case, data.version)
+    from .models import CaseWorkflow
+    handling = db.session.get(CaseWorkflow, case.id)
+    if handling and handling.stage == 'resolved':
+        abort(409, description='The completed complaint is preserved. A complainant appeal opens a new handling cycle.')
     changes = {}
     for field in ("description", "next_action", "priority", "due_at"):
         if field not in data.model_fields_set:
@@ -585,6 +589,16 @@ def edit_case(case_id):
         abort(422, description="No fields to update.")
     if "description" in changes:
         case.content_revision += 1
+        if handling and changes['description']['before'] != changes['description']['after']:
+            from .case_flow import announce
+            handling.cycle += 1
+            handling.stage, handling.outcome = 'initial_review', None
+            handling.version += 1
+            case.next_action = 'Updated complaint requires a fresh initial report and independent review'
+            event(case, 'workflow_restarted', 'Changed complaint facts require fresh handling reports',
+                  'Earlier reports remain preserved in the previous handling cycle.',
+                  {'cycle': handling.cycle, 'content_revision': case.content_revision})
+            announce(case, handling)
         for pair in db.session.scalars(select(Pair).where(or_(Pair.case_a_id == case.id, Pair.case_b_id == case.id))):
             pair.state = "pending"
             pair.version += 1
@@ -896,7 +910,8 @@ def review(pair_id):
     pair.version += 1
     db.session.add(Review(pair_id=pair.id, user_id=g.user.id, decision=data.decision, reason=data.reason, revisions=pair.evidence["revisions"]))
     for case in (pair.a, pair.b):
-        event(case, "overlap_reviewed", f"Possible overlap marked {data.decision}", data.reason, {"pair_id": pair.id})
+        event(case, "overlap_reviewed", f"Possible overlap marked {data.decision}",
+              'An authorized reviewer recorded the relationship assessment. Detailed reasoning remains in the scoped pair review.', {"pair_id": pair.id})
         owner = db.session.get(User, case.owner_id)
         if owner and owner.active and db.session.scalar(select(Complaint.id).where(Complaint.id == case.id, scope(owner))):
             notify(owner.id, case, 'overlap_review', f'{case.reference}: The reviewer marked a possible overlap {data.decision}. Review your case history and coordinate the next action.',

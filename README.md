@@ -41,6 +41,15 @@ These screenshots show the current local website with synthetic demo data. Examp
 
 ![OneCase sign-in page with its warm theme and selected emblem](docs/screenshots/sign-in.png)
 
+<details>
+<summary><strong>Complaint journey on the login page (mobile)</strong></summary>
+
+The numbered timeline explains each review and handover, with a panel showing where institution coordination, overlap alerts and evidence checks help.
+
+![Login page with the complaint workflow timeline](docs/screenshots/login-workflow-mobile.png)
+
+</details>
+
 ### Officer dashboard
 
 ![Scoped dashboard showing case totals, active and overdue records, and reporting](docs/screenshots/dashboard.png)

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('stakeholder submits proof, follows actions and downloads the frozen watermarked PDF', async ({ page, browser }) => {
+  test.setTimeout(120000); // Eight independent staff sessions and the full evidence-backed decision path.
   await page.setViewportSize({width: 390, height: 900});
   const email = `intake-${Date.now()}@example.com`;
   const register = await page.request.post('/api/auth/register', {data: {name: 'Browser Complainant', email, password: 'PersonalPassphrase!2026', confirm_password: 'PersonalPassphrase!2026', account_type: 'student', faculty_name:'Dr. Test Faculty', admission_year:2026, passout_year:2030}});
@@ -71,7 +72,7 @@ test('stakeholder submits proof, follows actions and downloads the frozen waterm
   const facultyPage = await contexts[0].newPage(); await facultyPage.goto(`/complaints/${id}`);
   await facultyPage.getByLabel('Stage report / handover reason').fill('Faculty reviewed the complaint and forwarded the initial findings to the officer.');
   await facultyPage.getByRole('button',{name:'Complete stage and hand over'}).click();
-  await expect(facultyPage.getByRole('heading',{name:'Officer review and triage'})).toBeVisible();
+  await expect(facultyPage.getByRole('heading',{name:'Officer review and triage',level:2})).toBeVisible();
   for (const [role, endpoint] of [['officer','advance'],['committee','reports'],['lead','advance'],['reviewer','reports'],['auditor','reports'],['verifier','advance']]) {
     const a = actors[role]; handling = await (await a.request.get(`/api/complaints/${id}/case-workflow`)).json();
     const result = await a.request.post(`/api/complaints/${id}/case-workflow/${endpoint}`, {headers:a.headers,

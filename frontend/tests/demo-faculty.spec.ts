@@ -1,0 +1,31 @@
+import {test,expect} from '@playwright/test';
+
+test('demo student stays in its college and Demo Faculty forwards every initial recommendation',async({page,browser})=>{
+  await page.setViewportSize({width:390,height:900});
+  await page.goto('/officer/login');
+  await expect(page.getByRole('heading',{name:'One complaint. A traceable path.'})).toBeVisible();
+  await expect(page.locator('.public-timeline>li')).toHaveCount(6);
+  await page.screenshot({path:'test-results/login-workflow-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Demo accounts',exact:true}).click();
+  await page.getByRole('button',{name:'Try Student demo',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Your faculty and enrolment'})).toBeVisible();
+  await expect(page.getByLabel('Institution',{exact:true})).not.toHaveValue('');
+  await page.getByLabel('Complaint summary').fill('Demo refund needs independent review');
+  await page.getByLabel('What happened?').fill('My college has not refunded the fee after withdrawal and I request independent review.');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button',{name:'Register complaint',exact:true}).click();
+  await page.getByRole('link',{name:'View complaint and action timeline'}).click();
+  await expect(page.getByRole('heading',{name:'Initial faculty / grievance review'})).toBeVisible();
+  const id=page.url().split('/').at(-1);
+  const context=await browser.newContext({baseURL:'http://127.0.0.1:5174'});
+  const signed=await context.request.post('/api/auth/demo-login',{data:{role:'faculty'}});
+  expect(signed.status()).toBe(200);
+  const faculty=await context.newPage();await faculty.goto(`/complaints/${id}`);
+  await expect(faculty.getByText('An initial report cannot close or dismiss a complaint.',{exact:false})).toBeVisible();
+  await faculty.getByLabel('Stage report / handover reason').fill('The initial faculty recommendation says resolved, but the officer must independently check the actual facts.');
+  await faculty.getByRole('button',{name:'Complete stage and hand over'}).click();
+  await expect(faculty.getByRole('heading',{name:'Officer review and triage',level:2})).toBeVisible();
+  await page.reload();await expect(page.getByRole('heading',{name:'Officer review and triage',level:2})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await context.close();
+});

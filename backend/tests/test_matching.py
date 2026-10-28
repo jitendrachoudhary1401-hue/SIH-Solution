@@ -55,6 +55,10 @@ def test_pipeline_review_scope_and_persisted_evidence(app, client):
     data = client.get(f"/api/overlaps/{pair_id}").json
     result = client.post(f"/api/overlaps/{pair_id}/review", headers=headers, json={"version": data["version"], "decision": "related", "reason": "Both describe the same fee return request"})
     assert result.status_code == 200 and result.json["state"] == "related"
+    assert result.json['reviews'][0]['reason'] == 'Both describe the same fee return request'
+    owner_client = app.test_client(); login(owner_client)
+    history = owner_client.get('/api/complaints/1/actions').json['items']
+    assert all(e['reason'] != 'Both describe the same fee return request' for e in history if e['kind'] == 'overlap_reviewed')
     with app.app_context():
         assert process(1, 1, DeterministicModels()) == "completed"
         assert db.session.get(Pair, pair_id).state == "related"

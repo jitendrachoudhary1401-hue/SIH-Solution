@@ -30,6 +30,7 @@ def test_public_registration_persists_and_starts_empty(app, client, kind):
     with app.app_context():
         user = db.session.scalar(select(User).where(User.email == "new.account@example.com"))
         assert user.requested_role == kind
+        assert user.faculty_name == 'Dr. Example Faculty' and user.admission_year == 2026 and user.passout_year == 2030
         assert hasher.verify(user.password_hash, "PersonalPassphrase!2026")
         assert user.password_hash != "PersonalPassphrase!2026"
         for model in (Grant, PermissionGrant, RoleAssignment, Notification):
