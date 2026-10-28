@@ -113,6 +113,7 @@ class Complaint(db.Model):
     content_revision = db.Column(db.Integer, nullable=False, default=1)
     matching_state = db.Column(db.String(30), nullable=False, default="queued")
     matching_error = db.Column(db.String(300))
+    incident_location = db.Column(db.String(200), nullable=False, default='', server_default='')
     institution = db.relationship(Institution)
     bureau = db.relationship(Bureau)
     owner = db.relationship(User, foreign_keys=[owner_id])
@@ -314,6 +315,31 @@ class Review(db.Model):
     revisions = db.Column(db.JSON, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
     user = db.relationship(User)
+
+
+class CoordinationGroup(db.Model):
+    """Human-confirmed coordination; originals and their workflows remain independent."""
+    id = db.Column(db.Integer, primary_key=True)
+    primary_complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    reason = db.Column(db.String(2000), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+
+
+class CoordinationMember(db.Model):
+    complaint_id = db.Column(db.Integer, db.ForeignKey("complaint.id"), primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey("coordination_group.id"), nullable=False, index=True)
+
+
+class CaseRecurrence(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.Integer, db.ForeignKey('complaint.id'), nullable=False, index=True)
+    previous_complaint_id = db.Column(db.Integer, db.ForeignKey('complaint.id'), nullable=False)
+    closure_event_id = db.Column(db.Integer, db.ForeignKey('action_event.id'), nullable=False)
+    revision = db.Column(db.Integer, nullable=False)
+    previous_revision = db.Column(db.Integer, nullable=False)
+    detected_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
+    __table_args__ = (UniqueConstraint('complaint_id', 'previous_complaint_id', 'closure_event_id', 'revision', name='uq_recurrence_snapshot'),)
 
 
 class Idempotency(db.Model):

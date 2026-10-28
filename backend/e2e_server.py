@@ -33,6 +33,18 @@ with tempfile.TemporaryDirectory(prefix="onecase-e2e-") as directory:
         from flask import request
         email = request.args.get("email", "")
         return {"items": [item for item in outbox if item["personalizations"][0]["to"][0]["email"] == email]}
+    @app.post('/api/test-only/reset-auth-attempts')
+    def reset_auth_attempts():
+        # This disposable loopback host is never imported by main.py/serve.py.
+        # Each browser scenario starts with independent brute-force counters.
+        from flask import request, abort
+        from sqlalchemy import delete
+        from app.models import LoginAttempt
+        if request.get_json(silent=True) != {'fixture': 'isolated-browser-test'}:
+            abort(403)
+        db.session.execute(delete(LoginAttempt))
+        db.session.commit()
+        return {'ok': True}
     # This disposable test host validates actual file structure and injects a
     # scanner double. Production never installs this synthetic scanner.
     from app import documents

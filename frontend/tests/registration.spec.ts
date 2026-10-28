@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 async function fillRegistration(page: Page, email: string) {
   await page.getByLabel('Full name', {exact: true}).fill('Registration Browser User');

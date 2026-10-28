@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 async function signIn(page: Page, email = 'lead.rb@onecase.demo') {
   await page.goto('/officer/login');
@@ -15,6 +15,7 @@ test('officer creates, acts on, disposes, reopens, and transfers a case', async 
   await page.getByRole('button', { name: 'New complaint' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Institution', { exact: true }).selectOption('1');
+  await dialog.getByLabel('Incident location', {exact: true}).fill('Synthetic main campus, accounts office');
   await dialog.getByLabel('Complaint description').fill('The student withdrew within the permitted window but the institution has not returned the fee deposit. Written reminders remain unanswered.');
   await dialog.getByLabel('Next action').fill('Request the fee refund ledger');
   await dialog.getByLabel('Illustrative deadline rule').selectOption('demo-business-v1');

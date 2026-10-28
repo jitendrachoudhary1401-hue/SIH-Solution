@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('stakeholder submits proof, follows actions and downloads the frozen watermarked PDF', async ({ page, browser }) => {
   test.setTimeout(120000); // Eight independent staff sessions and the full evidence-backed decision path.
@@ -13,6 +13,7 @@ test('stakeholder submits proof, follows actions and downloads the frozen waterm
   await expect(page.getByRole('heading', {name:'Register a complaint'})).toBeVisible();
   await page.getByLabel('Institution name', {exact:true}).fill('Browser Technical College');
   await page.getByLabel('State / region').fill('Rajasthan');
+  await page.getByLabel('Incident location', {exact: true}).fill('Synthetic main campus, accounts office');
   await page.getByLabel('Complaint summary').fill('Refund is still outstanding');
   await page.getByLabel('What happened?').fill('My fee refund has not been processed after withdrawal. Please review my withdrawal and payment proof.');
   await page.getByLabel('Photos, videos and documents as proof').setInputFiles('tests/fixtures/synthetic-outcome.png');

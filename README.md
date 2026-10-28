@@ -23,8 +23,8 @@ The website uses a warm ivory and terracotta theme, readable text and sharp cont
 | Case coordination | Accountable owner, next action, original receipt date, recorded transfers and recipient acknowledgement. Authorized status changes support disposal and reopening. |
 | Proceedings | Authority and route records, expiring appointments, notices/orders, milestone revisions, case packets, actual dispatch and acknowledgement records. |
 | Compliance and closure | Evidence submission and independent verification are separate. Disposal requires outcome evidence and a communication record; a closure PDF freezes the recorded outcome. |
-| Semantic overlap review | Local MiniLM embeddings retrieve candidates within the same verified institution; a cross-encoder reranks them. Assigned officers receive private alerts for their own case; a reviewer with access to both records the relationship decision. Original complaints remain separate. |
-| Monitoring and reports | Scoped dashboard totals, ageing/overdue views, deadline and milestone reminders, notifications, action history and authorized CSV exports. |
+| Overlap alerts and coordination | Same issue and same reported incident location are required within a verified institution/category. Immediate text suggestions supplement worker-based semantic matching. Authorized officers/reviewers can reject suggestions or merge a connected set into a coordination group. Resolved predecessors generate separate repeat-issue alerts with dates, not active overlap pairs. |
+| Monitoring and reports | Scoped dashboard totals, ageing/overdue views, deadline and milestone reminders, notifications, action history and authorized PDF exports. |
 | Administration | Staff approval, scoped permissions, role/appointment expiry, conflicts/recusals and manual institution verification with a recorded approval source. |
 | Account security | Argon2 password hashing, opaque hashed sessions, CSRF checks, privileged MFA enrollment, recovery codes, recent-authentication gates and SendGrid password recovery. |
 | Browser installation | Web app manifest and launcher icons; the install button opens the browser's native prompt when that browser offers installation. |
@@ -177,8 +177,8 @@ CI uses a disposable database and synthetic records. Browser checks cover regist
 
 ## Current limits
 
-- Matching operates on complaint descriptions and needs verified institution identity, installed models and a running worker. Domain accuracy, multilingual quality and load/uptime targets have not been validated. AI does not decide complaints or merge them.
-- Manual institution verification is implemented. Official registry integration, a staged bulk CSV importer and comprehensive issue-level matching remain future work; CSV export is available.
+- Overlap suggestions require a verified institution, the same reported incident location and category, and similar issue text. The immediate text check uses a conservative 85% wording threshold; semantic paraphrase matching still needs installed models and a running worker. Exact location comparison normalizes case and whitespace, not aliases. Missing location is excluded. Accuracy, multilingual quality and load/uptime targets remain unvalidated; people decide relationships.
+- Manual institution verification is implemented. Official registry integration, a staged bulk CSV importer and comprehensive issue-level matching remain future work; PDF export is available in the website; the CSV API remains for compatibility.
 - Milestone policy and competent authority must be recorded. Administrative disposal does not automatically conclude linked external proceedings or certify legal compliance.
 - Browser installation depends on browser support and eligibility. No offline access to private case data is promised.
 - The current malware bypass is explicit. Storage policies, approved permissions, sender verification, backups and recovery procedures still need validation for the actual deployment.

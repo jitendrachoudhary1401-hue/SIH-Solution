@@ -43,6 +43,7 @@ def seed_demo(password):
     for i, (school, officer, category, description, priority, age, due, status, next_action) in enumerate(examples, 1):
         owner = users[officer]
         case = Complaint(reference=f"OC-{now().year}-{i:05d}", institution_id=schools[school].id, category=category,
+                         incident_location='Synthetic main campus, accounts office' if category == 'Fee refund' else 'Synthetic main campus, ' + category,
                          description=description, priority=priority, bureau_id=owner.bureau_id, owner_id=owner.id,
                          received_at=now() - timedelta(days=age), due_at=now() + timedelta(days=due),
                          next_action=next_action, status=status)

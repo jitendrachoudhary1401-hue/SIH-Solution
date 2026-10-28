@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './fixtures';
 
 test('demo student stays in its college and Demo Faculty forwards every initial recommendation',async({page,browser})=>{
   await page.setViewportSize({width:390,height:900});
@@ -10,6 +10,7 @@ test('demo student stays in its college and Demo Faculty forwards every initial 
   await page.getByRole('button',{name:'Try Student demo',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Your faculty and enrolment'})).toBeVisible();
   await expect(page.getByLabel('Institution',{exact:true})).not.toHaveValue('');
+  await page.getByLabel('Incident location', {exact: true}).fill('Synthetic main campus, accounts office');
   await page.getByLabel('Complaint summary').fill('Demo refund needs independent review');
   await page.getByLabel('What happened?').fill('My college has not refunded the fee after withdrawal and I request independent review.');
   await page.getByRole('checkbox').check();

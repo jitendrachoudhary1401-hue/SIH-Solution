@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('case-coordination logo stays square on desktop and phone', async ({ page }) => {
   for (const [width, height, name] of [[1440, 1000, 'desktop'], [390, 844, 'phone']] as const) {

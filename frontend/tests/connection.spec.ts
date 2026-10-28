@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test';
+import {test, expect, type Page} from './fixtures';
 
 test('backend unavailable on initial load shows the custom outage screen', async ({page}) => {
   await page.clock.install();

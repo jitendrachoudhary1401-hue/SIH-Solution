@@ -67,6 +67,7 @@ class Registration(Input):
     institution_id: int = Field(gt=0)
     owner_id: int = Field(gt=0)
     category: str
+    incident_location: str = Field(default='', max_length=200)
     description: str = Field(min_length=20, max_length=20000)
     priority: str = "normal"
     received_at: datetime
@@ -114,6 +115,7 @@ class ActionChange(Change):
 
 
 class OrdinaryChange(Change):
+    incident_location: str | None = Field(default=None, min_length=2, max_length=200)
     description: str | None = Field(default=None, min_length=20, max_length=20000)
     next_action: str | None = Field(default=None, min_length=3, max_length=500)
     priority: str | None = None
@@ -176,7 +178,8 @@ def case_json(case, detail=False):
               "deadline_condition": condition(case), "deadline_policy": case.deadline_policy,
               "deadline_config": case.deadline_config, "paused_at": iso(case.paused_at),
               "next_action": case.next_action, "version": case.version, "content_revision": case.content_revision,
-              "matching_state": case.matching_state, "matching_error": case.matching_error}
+              "matching_state": case.matching_state, "matching_error": case.matching_error,
+              "incident_location": case.incident_location if has_content(case) else ''}
     result.update(issue_summary=case.issue_summary, complainant_type=case.complainant_type,
                   source_channel=case.source_channel, source_reference=case.source_reference, entered_at=iso(case.entered_at))
     result['handling_stage'] = flow.stage if flow else None
@@ -185,6 +188,9 @@ def case_json(case, detail=False):
         result.update(issue_summary="", source_reference="", next_action="Details restricted to authorized case readers.")
     if detail:
         content = has_content(case)
+        from .overlap_actions import coordination_json, recurrence_json
+        result['coordination'] = coordination_json(case) if content else None
+        result['recurrences'] = recurrence_json(case) if content else []
         result["description"] = case.description if content else "Full complaint content is outside your appointment's field scope. Use the assigned proceeding records below."
         result["can_transition"] = allowed(case, "case.transition") and flow is None
         result["allowed_transitions"] = TRANSITIONS[case.status] if result["can_transition"] else []
@@ -246,6 +252,8 @@ def enqueue(case):
         db.session.add(Job(complaint_id=case.id, revision=case.content_revision, dedup_key=key))
     case.matching_state = "queued"
     case.matching_error = None
+    from .overlap_actions import detect_text_overlaps
+    detect_text_overlaps(case)
 
 
 def notify(user_id, case, kind, message, key):
@@ -515,7 +523,7 @@ def register_case():
             abort(409, description="This submission key was already used for different content.")
         return case_json(case_or_404(previous.complaint_id), True), 200
     case = Complaint(reference=f"OC-{now().year}-{uuid4().hex.upper()}", institution_id=institution.id,
-                     category=data.category, description=data.description, priority=data.priority,
+                     category=data.category, description=data.description, priority=data.priority, incident_location=data.incident_location,
                      bureau_id=owner.bureau_id, owner_id=owner.id, received_at=data.received_at,
                      due_at=data.due_at, deadline_policy="Authorized explicit deadline v1" if data.due_at else "Deadline not set",
                      next_action=data.next_action)
@@ -564,7 +572,7 @@ def edit_case(case_id):
     if handling and handling.stage == 'resolved':
         abort(409, description='The completed complaint is preserved. A complainant appeal opens a new handling cycle.')
     changes = {}
-    for field in ("description", "next_action", "priority", "due_at"):
+    for field in ("description", "incident_location", "next_action", "priority", "due_at"):
         if field not in data.model_fields_set:
             continue
         value = getattr(data, field)
@@ -587,9 +595,10 @@ def edit_case(case_id):
         setattr(case, field, value)
     if not changes:
         abort(422, description="No fields to update.")
-    if "description" in changes:
+    material_changed = any(changes[f]['before'] != changes[f]['after'] for f in ('description', 'incident_location') if f in changes)
+    if material_changed:
         case.content_revision += 1
-        if handling and changes['description']['before'] != changes['description']['after']:
+        if handling:
             from .case_flow import announce
             handling.cycle += 1
             handling.stage, handling.outcome = 'initial_review', None
@@ -865,9 +874,10 @@ def authorized_pairs(aggregate=False):
 def pair_json(pair, detailed=False):
     result = {"id": pair.id, "a": case_json(pair.a, detailed), "b": case_json(pair.b, detailed),
               "state": pair.state, "band": pair.band, "evidence": pair.evidence, "version": pair.version}
-    result["stale"] = pair.evidence.get("revisions") != {str(pair.a.id): pair.a.content_revision, str(pair.b.id): pair.b.content_revision}
+    from .overlap_actions import is_stale, can_decide
+    result["stale"] = is_stale(pair)
+    result['can_review'] = can_decide(pair)
     if detailed:
-        result["can_review"] = "reviewer" in roles()
         result["reviews"] = [{"id": x.id, "reviewer": x.user.name, "decision": x.decision, "reason": x.reason, "created_at": iso(x.created_at)} for x in db.session.scalars(select(Review).where(Review.pair_id == pair.id).order_by(Review.id.desc()))]
     return result
 
@@ -895,11 +905,12 @@ def overlap_detail(pair_id):
 @api.post("/overlaps/<int:pair_id>/review")
 @authenticated
 def review(pair_id):
-    if "reviewer" not in roles():
-        abort(403, description="A designated reviewer must record the decision.")
     pair = db.session.scalar(authorized_pairs().where(Pair.id == pair_id))
     if not pair:
         abort(404)
+    from .overlap_actions import can_decide
+    if not can_decide(pair):
+        abort(403, description="An assigned officer for both complaints, their bureau lead, or an authorized reviewer must decide.")
     data = parse(ReviewChange)
     check_version(pair, data.version)
     if data.decision not in ("related", "unrelated"):
@@ -925,8 +936,12 @@ def review(pair_id):
 def notifications():
     visible = select(Complaint.id).where(scope())
     query = select(Notification).where(Notification.user_id == g.user.id, or_(Notification.complaint_id.is_(None), Notification.complaint_id.in_(visible)))
+    if request.args.get('unread') == 'true':
+        query = query.where(Notification.read_at.is_(None))
     def serialize(item):
-        return {"id": item.id, "kind": item.kind, "message": item.message, "complaint_id": item.complaint_id,
+        from .overlap_actions import recurrence_notification_message
+        message = recurrence_notification_message(item) if item.kind == 'repeat_issue' else item.message
+        return {"id": item.id, "kind": item.kind, "message": message, "complaint_id": item.complaint_id,
                 "read_at": iso(item.read_at), "created_at": iso(item.created_at)}
     return page(query.order_by(Notification.id.desc()), serialize, Notification)
 

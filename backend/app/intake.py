@@ -18,6 +18,7 @@ class Submission(Input):
     institution_name: str = Field(default='', max_length=200)
     region: str = Field(default='', max_length=80)
     category: str
+    incident_location: str = Field(default='', max_length=200)
     issue_summary: str = Field(min_length=5, max_length=300)
     description: str = Field(min_length=20, max_length=20000)
     affected_person: str = Field(default='', max_length=150)
@@ -112,7 +113,7 @@ def submit():
                      bureau_id=owner.bureau_id, owner_id=owner.id, submitter_user_id=g.user.id,
                      complainant_type=g.user.role, submitter_name=g.user.name,
                      affected_person=data.affected_person or g.user.name, representation_basis=data.representation_basis,
-                     category=data.category, issue_summary=data.issue_summary, description=data.description,
+                     category=data.category, issue_summary=data.issue_summary, description=data.description, incident_location=data.incident_location,
                      source_channel=data.source_channel, source_reference=data.source_reference,
                      next_action='Intake review and assignment', deadline_policy='Deadline not yet assigned')
     db.session.add(case)

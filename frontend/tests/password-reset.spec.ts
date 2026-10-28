@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('email link resets a password, revokes sessions and preserves an empty workspace', async ({ page }) => {
   const email = 'browser-password-reset@example.com';

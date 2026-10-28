@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('first privileged sign-in completes MFA and saves recovery codes before opening the workspace', async ({ page }) => {
   let enabled = false;

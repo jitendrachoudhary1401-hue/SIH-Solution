@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { date, label, type Case, type Event, type Page } from '../lib/api';
 import { Badge, ErrorBox, Heading, Loading, useData } from '../components/ui';
+import { CoordinationNotice } from './OverlapInbox';
 import HandlingWorkflow from './ComplaintJourney';
 
 export function ClosureReports({ c }: { c: Case }) {
@@ -17,5 +18,5 @@ export function ComplaintTimeline({ id }: { id: number }) {
 }
 
 export default function ComplaintRecord({ c, evidence }: { c: Case; evidence: ReactNode }) {
-  return <><Link className="back-link" to="/account">Back to my dashboard</Link><Heading eyebrow={c.is_submitter === false ? "APPOINTED COMPLAINT REVIEW" : "YOUR COMPLAINT"} title={c.reference} description={c.institution.name} /><Badge value={c.status} /><section className="card intake-card"><h2>{c.issue_summary || c.category}</h2><p className="description-text">{c.description}</p><dl className="detail-grid"><div><dt>Action taker</dt><dd>{c.owner}</dd></div><div><dt>Registered</dt><dd>{date(c.received_at, true)} IST</dd></div><div><dt>Next action</dt><dd>{c.next_action}</dd></div><div><dt>Category / source</dt><dd>{c.category} / {c.source_channel}</dd></div></dl></section><HandlingWorkflow c={c} /><ClosureReports c={c} /><ComplaintTimeline id={c.id} /><section className="card intake-card">{evidence}</section></>;
+  return <><Link className="back-link" to="/account">Back to my dashboard</Link><Heading eyebrow={c.is_submitter === false ? "APPOINTED COMPLAINT REVIEW" : "YOUR COMPLAINT"} title={c.reference} description={c.institution.name} /><Badge value={c.status} /><section className="card intake-card"><h2>{c.issue_summary || c.category}</h2><p className="description-text">{c.description}</p><dl className="detail-grid"><div><dt>Action taker</dt><dd>{c.owner}</dd></div><div><dt>Registered</dt><dd>{date(c.received_at, true)} IST</dd></div><div><dt>Next action</dt><dd>{c.next_action}</dd></div><div><dt>Incident location</dt><dd>{c.incident_location || 'Not recorded'}</dd></div><div><dt>Category / source</dt><dd>{c.category} / {c.source_channel}</dd></div></dl></section><CoordinationNotice c={c} /><HandlingWorkflow c={c} /><ClosureReports c={c} /><ComplaintTimeline id={c.id} /><section className="card intake-card">{evidence}</section></>;
 }

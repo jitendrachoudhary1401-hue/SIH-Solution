@@ -76,6 +76,7 @@ def process(case_id, revision, models=None):
     from .api import notify
     from .models import User
     from .auth import roles, scope, has_content
+    from .overlap_actions import same_context, record_recurrence
     started = time.perf_counter()
     case = db.session.get(Complaint, case_id)
     if not case or case.content_revision != revision:
@@ -83,7 +84,8 @@ def process(case_id, revision, models=None):
     if not case.institution.verified:
         raise ValueError("Institution identity is unverified; matching requires verification.")
     models = models or get_models()
-    snapshot = db.session.scalars(select(Complaint).where(Complaint.institution_id == case.institution_id).order_by(Complaint.id)).all()
+    snapshot = [c for c in db.session.scalars(select(Complaint).where(Complaint.institution_id == case.institution_id).order_by(Complaint.id))
+                if c.id == case.id or same_context(case, c)]
     revisions = {c.id: c.content_revision for c in snapshot}
     texts = {c.id: normalize(c.description) for c in snapshot}
     if any(not text for text in texts.values()):
@@ -141,6 +143,10 @@ def process(case_id, revision, models=None):
             raise ValueError("Invalid Cross-Encoder output")
         score, signals = hybrid(cosine, raw, case.category == other.category, models.bundle["weights"])
         band = "high" if score >= models.bundle["high_threshold"] else "uncertain" if score >= models.bundle["low_threshold"] else "low"
+        if case.status == 'disposed' or other.status == 'disposed':
+            if band == 'high':
+                record_recurrence(other, case) if case.status == 'disposed' else record_recurrence(case, other)
+            continue
         a, b = sorted((case.id, other.id))
         tokens_a = set(re.findall(r"\b\w{4,}\b", texts[a]))
         tokens_b = set(re.findall(r"\b\w{4,}\b", texts[b]))
@@ -150,7 +156,7 @@ def process(case_id, revision, models=None):
                     "truncated": truncations[a] or truncations[b] or models.pair_truncated(texts[a], texts[b]),
                     "category_agreement": case.category == other.category,
                     "shared_terms": sorted(tokens_a & tokens_b)[:12],
-                    "explanation": "Same verified institution. Category agreement is structured evidence; shared terms are lexical evidence, not neural attribution. Incident dates and verified references were not supplied; their weights are excluded."}
+                    "explanation": "Same verified institution, reported incident location and issue category. Semantic relevance suggests a similar issue; shared terms are lexical evidence, not proof of a duplicate incident. A human must compare facts and dates."}
         pair = db.session.scalar(select(Pair).where(Pair.case_a_id == a, Pair.case_b_id == b))
         if pair:
             if pair.evidence.get("revisions") != evidence["revisions"]:
@@ -170,13 +176,8 @@ def process(case_id, revision, models=None):
                 visible = set(db.session.scalars(select(Complaint.id).where(Complaint.id.in_([a, b]), scope(reviewer))))
                 if visible == {a, b} and has_content(pair.a, reviewer) and has_content(pair.b, reviewer):
                     notify(reviewer.id, case, "overlap", "A possible overlap is ready for review.", f"pair:{pair.id}:{revision_key}:{reviewer.id}")
-            for own_case in (case, other):
-                owner = db.session.get(User, own_case.owner_id)
-                if owner and owner.active and roles(owner) & {'officer', 'lead'} and db.session.scalar(
-                        select(Complaint.id).where(Complaint.id == own_case.id, scope(owner))):
-                    # The alert links only to the recipient's own case. Cross-case content stays scoped.
-                    notify(owner.id, own_case, "overlap", f"{own_case.reference}: A possible overlap needs coordination. An authorized reviewer must assess the related complaints.",
-                           f"pair-owner:{pair.id}:{revision_key}:{own_case.id}:{owner.id}")
+            from .overlap_actions import alert_owners
+            alert_owners(pair)
     case.matching_state, case.matching_error = "completed", None
     db.session.commit()
     return "completed"

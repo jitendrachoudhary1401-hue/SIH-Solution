@@ -106,6 +106,8 @@ def create_app(config=None):
     from .demo import demo_api
     from .intake import intake_api
     from .complaint_reports import report_api
+    from . import overlap_actions  # Register overlap coordination routes on the API blueprint.
+    from . import register_pdf
     app.register_blueprint(api, url_prefix="/api")
     app.register_blueprint(workflow_api, url_prefix="/api")
     app.register_blueprint(administration_api, url_prefix="/api")

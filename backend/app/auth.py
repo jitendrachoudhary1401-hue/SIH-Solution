@@ -237,7 +237,7 @@ def capabilities(user):
     return {"register": bool(effective & {"officer", "lead"}) and bool(user.bureau_id),
             "dashboard": bool(effective & {"officer", "lead", "reviewer", "verifier", "executive", "auditor"}),
             "cases": bool(effective), "institutions": bool(effective - {"admin", "committee"}),
-            "overlaps": "reviewer" in effective, "alerts": bool(effective),
+            "overlaps": bool(effective & {"reviewer", "officer", "lead"}), "alerts": bool(effective),
             "audit": bool(effective - {"admin", "executive"}), "reports": bool(effective & {"officer", "lead", "executive", "auditor"}),
             "admin": "admin" in effective}
 

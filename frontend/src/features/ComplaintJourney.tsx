@@ -22,9 +22,9 @@ export function LoginJourney() {
     <div className="journey-solution"><h3>Where OneCase connects the work</h3><dl>
       <div><dt>One institution record</dt><dd>Authorized teams can follow institution-related complaints across bureaus.</dd></div>
       <div><dt>Clear ownership and handovers</dt><dd>Assigned people, reports, deadlines and actions stay attached to the complaint.</dd></div>
-      <div><dt>Possible overlap alerts</dt><dd>Matching can flag related complaints for officers and an authorized reviewer. People decide the relationship.</dd></div>
+      <div><dt>Overlap and repeat-issue alerts</dt><dd>Similar issues at the same incident location can flag active overlaps. An earlier resolved case appears separately with its resolution timeline. Authorized people decide the relationship.</dd></div>
       <div><dt>Evidence and accountable outcomes</dt><dd>Independent checks, a recorded executive outcome and an appeal request preserve the case history.</dd></div>
-    </dl><p className="muted">Matching needs a verified institution and a running worker. External grievance or appeal proceedings keep their own authorities and timelines.</p></div>
+    </dl><p className="muted">Overlap checks require a verified institution, the same issue and the same reported incident location. Semantic matching also needs a running worker. External grievance or appeal proceedings keep their own authorities and timelines.</p></div>
   </section>;
 }
 

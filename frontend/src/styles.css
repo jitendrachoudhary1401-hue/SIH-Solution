@@ -633,3 +633,25 @@ tbody tr:hover { background: #fcf7ef; }
   .not-found-card h1 { font-size: clamp(25px, 7vw, 32px); letter-spacing: -.5px; }
   .footer { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
+
+.overlap-inbox { margin-bottom: 24px; border-top: 3px solid #ab5735; }
+.overlap-inbox h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.overlap-body { padding: 20px 24px; }
+.overlap-group { padding: 20px; margin-top: 20px; border: 1px solid #d8bea0; background: #fcf5e8; }
+.overlap-group ul, .overlap-preview { padding-left: 20px; }
+.overlap-group li { margin: 10px 0; overflow-wrap: anywhere; }
+.overlap-group li span { display: block; color: #856b56; }
+.overlap-buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0 10px; }
+.overlap-preview { max-height: 300px; overflow: auto; overflow-wrap: anywhere; }
+.overlap-links { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.coordination-notice { margin: 20px 0; }
+@media(max-width:600px) { .overlap-inbox .card-heading { align-items: flex-start; flex-direction: column; gap: 12px; } .overlap-body, .overlap-group { padding: 16px; } }
+
+.topbar-actions .icon-button { position: relative; }
+.notification-count { position: absolute; top: -3px; right: -5px; padding: 1px 4px; min-width: 17px; background: #9d452d; color: #fff; font-size: 10px; font-weight: 700; line-height: 1.4; }
+@media(max-width:600px) {
+  .alert-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 12px; padding: 18px; }
+  .alert-row .grow { min-width: 0; overflow-wrap: anywhere; }
+  .alert-row .alert-icon { width: 34px; height: 34px; }
+  .alert-row > button, .alert-row > .muted { grid-column: 2; justify-self: start; }
+}

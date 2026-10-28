@@ -48,7 +48,7 @@ def test_pipeline_review_scope_and_persisted_evidence(app, client):
         pair_id = pair.id
         assert pair.band == "high"
         assert pair.evidence["revisions"] == {"1": 1, "2": 1}
-        assert db.session.scalar(select(func.count()).select_from(PairScore)) == 2
+        assert db.session.scalar(select(func.count()).select_from(PairScore)) == 1
     login(client)
     assert client.get(f"/api/overlaps/{pair_id}").status_code == 404
     headers = login(client, "reviewer@onecase.demo")
