@@ -18,7 +18,7 @@ The website uses a warm ivory and terracotta theme, readable text and sharp cont
 
 | Area | Current behaviour |
 | --- | --- |
-| Public intake | Registration for students, parents, faculty and institution staff; complaint source, institution, proof uploads and a personal timeline. Staff registrations request approval before receiving staff access. |
+| Public intake | Registration for students, parents, faculty, institution staff and other public users; complaint source, institution, proof uploads and a personal timeline. Staff registrations request approval before receiving staff access. |
 | Handling timeline | Initial faculty/grievance report, officer triage, lead and committee assessments, independent investigation, conditional auditor review, executive outcome and complainant appeal. Initial recommendations cannot dismiss cases. See [handling workflow and setup](docs/COMPLAINT_HANDLING_WORKFLOW.md). |
 | Case coordination | Accountable owner, next action, original receipt date, recorded transfers and recipient acknowledgement. Authorized status changes support disposal and reopening. |
 | Proceedings | Authority and route records, expiring appointments, notices/orders, milestone revisions, case packets, actual dispatch and acknowledgement records. |
@@ -210,7 +210,7 @@ The implementation preserves original complaint records and uses human review fo
 
 ### Current submission and overlap rules
 
-Only student, parent, faculty and institution-staff accounts can submit complaints. Officers, leads and review roles manage existing records; both complaint-creation API routes enforce this restriction.
+Student, parent, faculty, institution-staff and Other accounts can submit complaints. Officers, leads and review roles manage existing records; both complaint-creation API routes enforce this restriction.
 
 Overlap checks run automatically after intake/changes and periodically in staff workspaces. The dashboard, bell, Alerts and Overlap review use current ongoing suggestions; resolved cases are excluded from active pairs. Earlier resolutions appear separately as repeat-issue timelines. Missing locations are shown as actionable links rather than silently treated as zero matches. Institution and bureau filters use integer identifiers for PostgreSQL.
 

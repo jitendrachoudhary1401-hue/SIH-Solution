@@ -44,7 +44,7 @@ def test_numeric_filters_use_integer_postgres_binds_and_reject_bad_values(app,cl
         assert all(str(bind.type)=='INTEGER' for key,bind in compiled.binds.items() if key.startswith(('bureau_id_','institution_id_')))
 
 
-@pytest.mark.parametrize('role',['student','parent','faculty','staff'])
+@pytest.mark.parametrize('role',['student','parent','faculty','staff','other'])
 def test_only_submitter_roles_use_both_registration_routes(app,client,role):
     headers=public_login(client,role)
     assert client.get('/api/auth/me').json['user']['capabilities']['submit_complaint']
@@ -58,10 +58,14 @@ def test_review_roles_cannot_register_through_either_route(app,client,email):
         assert client.post(route,headers=headers,json=details()).status_code==403
 
 
-def test_other_account_cannot_register_and_gets_no_submission_capability(app,client):
+def test_other_account_can_register_through_both_routes(app,client):
+    from uuid import uuid4
     headers=public_login(client,'other')
-    assert not client.get('/api/auth/me').json['user']['capabilities']['submit_complaint']
-    assert client.post('/api/complaints',headers=headers,json=details()).status_code==403
+    assert client.get('/api/auth/me').json['user']['capabilities']['submit_complaint']
+    for route in ('/api/complaints','/api/intake/complaints'):
+        response=client.post(route,headers={**headers,'Idempotency-Key':str(uuid4())},json=details())
+        assert response.status_code==201 and response.json['is_submitter']
+        assert response.json['handling_stage']=='initial_review'
 
 
 def test_overlap_notification_links_pair_and_disappears_when_either_case_is_closed(app,client):

@@ -1,6 +1,6 @@
 # Complaint handling timeline
 
-New portal submissions by students, parents, faculty and institution staff use the same internal handling sequence:
+New portal submissions by students, parents, faculty, institution staff and other public users use the same internal handling sequence:
 
 1. An appointed faculty / grievance reviewer records the initial report.
 2. The accountable officer reviews and triages the complaint.

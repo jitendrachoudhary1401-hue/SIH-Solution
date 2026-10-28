@@ -51,7 +51,7 @@ export default function ComplaintIntake({ user }: { user: User }) {
     }
     setError(null); setFiles(next.map(file => ({ file, key: crypto.randomUUID(), done: false })));
   }
-  return <section className="card intake-card" id="register-complaint"><h2>Register a complaint</h2><p className="muted">For enrolled students, parents, faculty and non-teaching institution staff. Your complaint receives a unique reference and is shared with the responsible action taker and system administrator.</p>
+  return <section className="card intake-card" id="register-complaint"><h2>Register a complaint</h2><p className="muted">For enrolled students, parents, faculty, non-teaching institution staff and other public users. Your complaint receives a unique reference and is shared with the responsible action taker and system administrator.</p>
     {receipt && <div className="notice" role="status"><div><strong>Complaint registered: {receipt.reference}</strong><p>{files.some(f => !f.done) ? 'Your complaint is saved. Retry any unfinished proof uploads below.' : 'Your complaint and selected uploads are saved. Check each file’s validation and malware scan status in the complaint record.'}</p><Link className="button primary" to={`/complaints/${receipt.id}`}>View complaint and action timeline</Link></div></div>}
     <form className="form-grid" onSubmit={submit}>
       <fieldset disabled={busy || !!receipt} className="intake-fields">

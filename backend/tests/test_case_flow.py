@@ -44,7 +44,7 @@ def assign(app, users, cid, **extra):
     assert response.status_code == 200, response.json
 
 
-@pytest.mark.parametrize('kind', ['student', 'parent', 'faculty', 'staff'])
+@pytest.mark.parametrize('kind', ['student', 'parent', 'faculty', 'staff', 'other'])
 def test_all_complainants_follow_reports_verification_decision_and_appeal(app, kind):
     users = provision(app)
     public = app.test_client(); headers = public_login(public, kind)

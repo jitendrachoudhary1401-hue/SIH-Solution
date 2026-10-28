@@ -9,7 +9,7 @@ from .models import (db, Complaint, Grant, Session, now, RoleAssignment, Permiss
 
 ROLES = {"faculty_reviewer", "officer", "lead", "reviewer", "committee", "verifier", "executive", "auditor", "admin"}
 PUBLIC_ROLES = {"student", "parent", "faculty", "staff", "other"}
-SUBMITTER_ROLES = {"student", "parent", "faculty", "staff"}
+SUBMITTER_ROLES = {"student", "parent", "faculty", "staff", "other"}
 MFA_ROLES = {"faculty_reviewer", "lead", "reviewer", "committee", "verifier", "executive", "admin"}
 OPERATIONS = {"case.read", "case.transition", "case.transfer", "case.route", "case.packet", "documents.read",
               "case.export", "audit.read", "monitor.aggregate", "case.proceeding", "case.compliance"}

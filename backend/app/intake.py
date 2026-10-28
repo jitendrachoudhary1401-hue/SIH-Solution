@@ -30,7 +30,7 @@ class Submission(Input):
 
 def stakeholder():
     if g.user.role not in SUBMITTER_ROLES:
-        abort(403, description='Only students, parents, institution staff and faculty may register complaints. Review roles manage assigned cases.')
+        abort(403, description='Students, parents, institution staff, faculty and other public users may register complaints. Review roles manage assigned cases.')
 
 
 def intake_owner():
